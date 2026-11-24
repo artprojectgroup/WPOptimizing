@@ -1073,6 +1073,12 @@ trait WPOptimizing_Cache_Trait {
 	 * @return void
 	 */
 	protected function cache_edge_action( $check ) {
+		// The check too: it makes the server ask its own pages and keeps what it finds, the same
+		// state the Varnish switch is saved in. Same permission as the rest of the page cache.
+		if ( ! $this->can_manage_dropin() ) {
+			$this->cache_flash( __( 'You do not have permission to manage the page cache.', 'wpoptimizing' ), 'error' );
+			return;
+		}
 		if ( $check ) {
 			$state = wpoptimizing_edge_cache_check();
 			$this->cache_flash(
@@ -1085,10 +1091,6 @@ trait WPOptimizing_Cache_Trait {
 					),
 				'updated'
 			);
-			return;
-		}
-		if ( ! $this->can_manage_dropin() ) {
-			$this->cache_flash( __( 'You do not have permission to manage the page cache.', 'wpoptimizing' ), 'error' );
 			return;
 		}
 		$state                  = wpoptimizing_edge_cache_state();

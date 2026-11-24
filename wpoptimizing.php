@@ -322,7 +322,8 @@ if ( ! defined( 'WPOPT_ADVCACHE_VERSION' ) ) {
 	// v9: a buffer flushed or cleaned before the end of the page is not stored (truncated pages).
 	// v10: inert when run from another wp-content.
 	// v18: a render cut short (client gone, time limit, fatal) is not stored; text files, one copy.
-	define( 'WPOPT_ADVCACHE_VERSION', '18' );
+	// v19: folder named after the allowed host, only HTML stored as a page, cap on query variants.
+	define( 'WPOPT_ADVCACHE_VERSION', '19' );
 }
 // Bump in lockstep with the "WPOPT_OBJECT_CACHE vN" signature in the drop-in
 // template so installed sites are offered an update when the drop-in changes.

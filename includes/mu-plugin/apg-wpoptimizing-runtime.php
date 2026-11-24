@@ -829,7 +829,7 @@ function apg_wpopt_rtmap_repair_wpdb_artifacts() {
 	if ( ! $in || ! $out ) {
 		return;
 	}
-	fwrite( $in, (string) $content );
+	fwrite( $in, (string) $content ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fwrite -- Must-use plugin: runs before WP_Filesystem exists, on a stream it opened itself.
 	rewind( $in );
 	$gone    = 0;
 	$primera = true;
@@ -1565,7 +1565,7 @@ function apg_wpopt_rtmap_parse_keys( $content ) {
 	if ( ! $fh ) {
 		return array();
 	}
-	fwrite( $fh, (string) $content );
+	fwrite( $fh, (string) $content ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fwrite -- Must-use plugin: runs before WP_Filesystem exists, on a stream it opened itself.
 	rewind( $fh );
 	$keys = apg_wpopt_rtmap_keys_from_stream( $fh );
 	// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose
@@ -1632,7 +1632,7 @@ function apg_wpopt_rtmap_cifrado_en_disco( $path ) {
 	if ( ! $fh ) {
 		return false;
 	}
-	$cabeza = (string) fread( $fh, strlen( $magic ) );
+	$cabeza = (string) fread( $fh, strlen( $magic ) ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fread -- Must-use plugin: runs before WP_Filesystem exists, on a stream it opened itself.
 	// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose
 	fclose( $fh );
 	return 0 === strncmp( $cabeza, $magic, strlen( $magic ) );
@@ -1715,14 +1715,14 @@ function apg_wpopt_rtmap_cabecera_en_fichero( $path ) {
 		fclose( $in );
 		return false;
 	}
-	$ok = ( false !== fwrite( $out, $cabecera ) );
+	$ok = ( false !== fwrite( $out, $cabecera ) ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fwrite -- Must-use plugin: runs before WP_Filesystem exists, on a stream it opened itself.
 	while ( $ok && ! feof( $in ) ) {
-		$trozo = fread( $in, 1048576 );
+		$trozo = fread( $in, 1048576 ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fread -- Must-use plugin: runs before WP_Filesystem exists, on a stream it opened itself.
 		if ( false === $trozo ) {
 			$ok = false;
 			break;
 		}
-		if ( '' !== $trozo && false === fwrite( $out, $trozo ) ) {
+		if ( '' !== $trozo && false === fwrite( $out, $trozo ) ) { // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fwrite -- Must-use plugin: runs before WP_Filesystem exists, on a stream it opened itself.
 			$ok = false;
 		}
 	}
@@ -2186,12 +2186,12 @@ function apg_wpopt_rtmap_flush() {
 
 		$stat = fstat( $fh );
 		if ( empty( $stat['size'] ) ) {
-			fwrite( $fh, apg_wpopt_rtmap_header() );
-		} elseif ( 0 === fseek( $fh, -1, SEEK_END ) && "\n" !== fread( $fh, 1 ) ) {
+			fwrite( $fh, apg_wpopt_rtmap_header() ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fwrite -- Must-use plugin: runs before WP_Filesystem exists, on a stream it opened itself.
+		} elseif ( 0 === fseek( $fh, -1, SEEK_END ) && "\n" !== fread( $fh, 1 ) ) { // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fread -- Must-use plugin: runs before WP_Filesystem exists, on a stream it opened itself.
 			// Un fichero sin salto final pegaría la primera fila nueva a la última vieja.
-			fwrite( $fh, "\n" );
+			fwrite( $fh, "\n" ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fwrite -- Must-use plugin: runs before WP_Filesystem exists, on a stream it opened itself.
 		}
-		$escrito = ( false !== fwrite( $fh, $nuevas ) );
+		$escrito = ( false !== fwrite( $fh, $nuevas ) ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fwrite -- Must-use plugin: runs before WP_Filesystem exists, on a stream it opened itself.
 		fflush( $fh );
 
 		// El índice se sella con el mtime y el TAMAÑO del CSV, y añadir no los invalida en la

@@ -1,6 +1,6 @@
 <?php
 /**
- * WPOPT_PAGE_CACHE v18
+ * WPOPT_PAGE_CACHE v19
  *
  * WPOptimizing page-cache drop-in. This is a TEMPLATE: the plugin fills the
  * %%PLACEHOLDER%% strings with real paths when it installs it to
@@ -130,8 +130,10 @@ if ( function_exists( 'wpopt_pc_site_host' ) ) {
 
 // The cache directory is keyed by host, so a forged Host header would let anyone create
 // unlimited directories under the cache folder. Only hosts this install answers to are
-// cached; anything else renders normally, uncached.
-if ( ! wpopt_pc_host_ok( $wpopt_pc_host, $wpopt_pc_cfg ) ) {
+// cached; anything else renders normally, uncached. The folder is named after the host as
+// the list has it (wpopt_pc_allowed_host()), never after the raw header.
+$wpopt_pc_host = function_exists( 'wpopt_pc_allowed_host' ) ? wpopt_pc_allowed_host( $wpopt_pc_host, $wpopt_pc_cfg ) : ( wpopt_pc_host_ok( $wpopt_pc_host, $wpopt_pc_cfg ) ? $wpopt_pc_host : '' );
+if ( '' === $wpopt_pc_host ) {
 	if ( $wpopt_pc_stats_on ) {
 		wpopt_pc_stats_record( 'bypass-host' );
 	}
@@ -322,6 +324,8 @@ ob_start(
 			'is_rest'           => ! empty( $store['rest'] ) && empty( $store['text'] ),
 			'is_text'           => ! empty( $store['text'] ),
 			'text_type_ok'      => ! empty( $store['text'] ) && function_exists( 'wpopt_pc_text_response_ok' ) && wpopt_pc_text_response_ok( headers_list() ),
+			// Sent as an HTML page (a REST answer or a text file is judged by its own rules above).
+			'is_html'           => ! empty( $store['rest'] ) || ! function_exists( 'wpopt_pc_response_is_html' ) || wpopt_pc_response_is_html( headers_list() ),
 			// A render cut short: the client left (and PHP stopped), the time limit, a fatal error.
 			'incomplete'        => function_exists( 'wpopt_pc_render_incomplete' ) && wpopt_pc_render_incomplete( connection_status(), (bool) ignore_user_abort(), error_get_last() ),
 		);
@@ -357,8 +361,13 @@ ob_start(
 			$keep = wpopt_pc_variant_room( $store['plain'] );
 			$why  = $keep ? '' : 'variants';
 		}
+		// The same for the variants of a whitelisted query string (wpopt_pc_query_room()).
+		if ( $keep && false !== strpos( basename( $store['plain'] ), '-q' ) && function_exists( 'wpopt_pc_query_room' ) ) {
+			$keep = wpopt_pc_query_room( $store['plain'] );
+			$why  = $keep ? '' : 'variants';
+		}
 		// Counted, and one MISS in twenty sampled for the paths that fail most (an estimate).
-		if ( function_exists( 'wpopt_pc_stats_record' ) && 'miss' === wpopt_pc_stats_record( $keep ? 'miss' : 'bypass-' . $why ) && 1 === mt_rand( 1, 20 ) ) {
+		if ( function_exists( 'wpopt_pc_stats_record' ) && 'miss' === wpopt_pc_stats_record( $keep ? 'miss' : 'bypass-' . $why ) && 1 === mt_rand( 1, 20 ) ) { // phpcs:ignore WordPress.WP.AlternativeFunctions.rand_mt_rand -- Sampling only, in a drop-in that runs before pluggable wp_rand() is loaded.
 			wpopt_pc_stats_sample( $GLOBALS['wpopt_pc_stats']['dir'], isset( $store['path'] ) ? $store['path'] : '' );
 		}
 		if ( ! headers_sent() ) {

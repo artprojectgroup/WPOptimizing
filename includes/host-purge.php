@@ -960,9 +960,7 @@ function wpoptimizing_host_purge_register() {
 	foreach ( wpoptimizing_content_purge_hooks() as $hook ) {
 		add_action( $hook, 'wpoptimizing_host_purge_on_post' );
 	}
-	foreach ( array( 'comment_post', 'wp_set_comment_status', 'edit_comment' ) as $hook ) {
-		add_action( $hook, 'wpoptimizing_host_purge_on_comment' );
-	}
+	wpoptimizing_content_register_comment_hooks( 'wpoptimizing_host_purge_on_comment' );
 	foreach ( wpoptimizing_content_product_hooks() as $hook ) {
 		add_action( $hook, 'wpoptimizing_host_purge_on_product' );
 	}

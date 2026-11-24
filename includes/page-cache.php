@@ -209,6 +209,13 @@ function wpoptimizing_page_cache_build_config( $active ) {
 			$config[ $key ] = array_values( array_filter( array_map( 'strval', $opt[ $key ] ) ) );
 		}
 	}
+	// ?lang= only on a site whose multilingual plugin reads it, and only with its real languages
+	// (wpopt_pc_query_value_ok()): elsewhere WordPress ignores it and every invented value was a copy.
+	$langs = wpoptimizing_page_cache_lang_codes();
+	if ( $langs ) {
+		$config['query_whitelist'] = array_values( array_unique( array_merge( isset( $config['query_whitelist'] ) ? (array) $config['query_whitelist'] : array(), array( 'lang' ) ) ) );
+		$config['lang_codes']      = $langs;
+	}
 	// A theme that prints different HTML on phones needs a second copy for them.
 	$config['mobile_separate'] = ! empty( $opt['mobile_separate'] );
 	// Page types never stored (front page, archives, chosen content types…), judged at buffer
@@ -757,10 +764,11 @@ function wpoptimizing_page_cache_allowed_hosts() {
 	 * Filters the host names the page cache will store/serve for.
 	 *
 	 * Add extra domains here when the site legitimately answers on more than one (domain
-	 * mapping, a staging alias). Anything outside the list is simply not cached.
+	 * mapping, a staging alias). Anything outside the list is simply not cached, and an empty
+	 * list caches nothing (wpopt_pc_allowed_host()).
 	 *
 	 * @since 0.1.0
-	 * @param string[] $hosts Host names, lower-case, no port.
+	 * @param string[] $hosts Host names, lower-case; «host:port» accepts that port only.
 	 */
 	$hosts = (array) apply_filters( 'wpoptimizing_page_cache_allowed_hosts', array_values( array_unique( array_filter( $hosts ) ) ) );
 
@@ -787,6 +795,52 @@ function wpoptimizing_page_cache_language_domains() {
 		}
 	}
 	return wpoptimizing_page_cache_domain_hosts( $domains );
+}
+
+/**
+ * The language codes a multilingual plugin answers ?lang= with, lower case; none without one.
+ *
+ * WPML (wpml_active_languages, keyed by code) and Polylang (pll_languages_list(), its slugs) both
+ * read ?lang= on the front end. Without either, WordPress ignores the parameter, so caching it
+ * only made copies of one page under invented names. Filterable for another plugin that reads it.
+ *
+ * @return string[]
+ */
+function wpoptimizing_page_cache_lang_codes() {
+	$codes = array();
+	if ( defined( 'ICL_SITEPRESS_VERSION' ) ) {
+		$codes = array_keys( (array) apply_filters( 'wpml_active_languages', array(), 'skip_missing=0' ) ); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- WPML's public API.
+	} elseif ( function_exists( 'pll_languages_list' ) ) {
+		$codes = (array) pll_languages_list( array( 'fields' => 'slug' ) );
+	}
+
+	/**
+	 * Filters the values of ?lang= the page cache stores a copy for.
+	 *
+	 * Only real language codes: every value is a copy of every page that is asked with it.
+	 *
+	 * @since 0.1.0
+	 * @param string[] $codes Language codes, e.g. array( 'es', 'en', 'pt-br' ).
+	 */
+	$codes = (array) apply_filters( 'wpoptimizing_page_cache_lang_codes', $codes );
+	return wpoptimizing_page_cache_clean_lang_codes( $codes );
+}
+
+/**
+ * Language codes the drop-in may file a copy under: lower case, the shape of a code. Pure.
+ *
+ * @param array $codes Codes.
+ * @return string[]
+ */
+function wpoptimizing_page_cache_clean_lang_codes( array $codes ) {
+	$out = array();
+	foreach ( $codes as $code ) {
+		$code = strtolower( trim( (string) $code ) );
+		if ( 1 === preg_match( '/^[a-z]{2,3}(?:-[a-z0-9]{2,8})?$/', $code ) ) {
+			$out[] = $code;
+		}
+	}
+	return array_values( array_unique( $out ) );
 }
 
 /**
@@ -1554,9 +1608,8 @@ function wpoptimizing_page_cache_register_purge_hooks() {
 	foreach ( wpoptimizing_content_purge_hooks() as $hook ) {
 		add_action( $hook, 'wpoptimizing_page_cache_purge_post' );
 	}
-	add_action( 'comment_post', 'wpoptimizing_page_cache_purge_comment' );
-	add_action( 'wp_set_comment_status', 'wpoptimizing_page_cache_purge_comment' );
-	add_action( 'edit_comment', 'wpoptimizing_page_cache_purge_comment' );
+	// Only comments that appear on, or disappear from, the page (wpoptimizing_content_register_comment_hooks()).
+	wpoptimizing_content_register_comment_hooks( 'wpoptimizing_page_cache_purge_comment' );
 
 	// WooCommerce stock and scheduled sales.
 	foreach ( wpoptimizing_content_product_hooks() as $hook ) {
@@ -1626,6 +1679,66 @@ function wpoptimizing_page_cache_installed_version() {
 }
 
 /**
+ * May this request rewrite the files the page cache keeps outside its folder (advanced-cache.php,
+ * wp-config.php, .htaccess)? Only someone who may install the drop-in from the screen
+ * (wpoptimizing_user_can_manage_dropin(): on a network, a network administrator) or WP-CLI.
+ * WP-Cron does not ask: it runs the refresh it was given (wpoptimizing_page_cache_schedule_refresh()).
+ *
+ * admin_init also runs for admin-ajax.php and admin-post.php, where nobody needs to be logged in:
+ * without this, any visitor could make the site rewrite those files, as often as they liked.
+ *
+ * @return bool
+ */
+function wpoptimizing_page_cache_may_rewrite_files() {
+	return wpoptimizing_page_cache_rewrite_allowed(
+		defined( 'WP_CLI' ) && WP_CLI,
+		function_exists( 'wpoptimizing_user_can_manage_dropin' )
+			? wpoptimizing_user_can_manage_dropin()
+			: ( is_multisite() ? current_user_can( 'manage_network_options' ) : current_user_can( wpoptimizing_cap() ) )
+	);
+}
+
+/**
+ * The rule of wpoptimizing_page_cache_may_rewrite_files(), apart from where its answers come from. Pure.
+ *
+ * @param bool $cli Running under WP-CLI.
+ * @param bool $can The current user may manage the drop-in.
+ * @return bool
+ */
+function wpoptimizing_page_cache_rewrite_allowed( $cli, $can ) {
+	return (bool) $cli || (bool) $can;
+}
+
+/**
+ * Bring the drop-in up to date in a WP-Cron run of its own, once.
+ *
+ * For a request that may not do it itself (a visitor's, after an update): the visitor never
+ * touches the files, and the refresh still happens without waiting for an administrator.
+ *
+ * @return void
+ */
+function wpoptimizing_page_cache_schedule_refresh() {
+	if ( function_exists( 'wp_next_scheduled' ) && ! wp_next_scheduled( 'wpoptimizing_page_cache_refresh_dropin' ) ) {
+		wp_schedule_single_event( time(), 'wpoptimizing_page_cache_refresh_dropin' );
+	}
+}
+add_action( 'wpoptimizing_page_cache_refresh_dropin', 'wpoptimizing_page_cache_refresh_dropin' );
+
+/**
+ * Refresh the drop-in from an admin page load, for someone allowed to (see
+ * wpoptimizing_page_cache_may_rewrite_files()); anyone else's request leaves the files alone.
+ *
+ * @return void
+ */
+function wpoptimizing_maybe_refresh_page_cache_dropin() {
+	if ( ! wpoptimizing_page_cache_may_rewrite_files() ) {
+		return;
+	}
+	wpoptimizing_page_cache_refresh_dropin();
+}
+add_action( 'admin_init', 'wpoptimizing_maybe_refresh_page_cache_dropin' );
+
+/**
  * Refresh OUR installed page-cache drop-in (and its config sidecar) when the bundled
  * version is newer than the one on disk.
  *
@@ -1634,9 +1747,12 @@ function wpoptimizing_page_cache_installed_version() {
  * touched by a plugin update. Mirrors the object-cache / db.php refreshers: it only ever
  * rewrites a drop-in that carries our own marker.
  *
+ * Checks no capability: its callers do (wpoptimizing_maybe_refresh_page_cache_dropin(), the
+ * catch-up after an update) or run it from WP-Cron (wpoptimizing_page_cache_schedule_refresh()).
+ *
  * @return void
  */
-function wpoptimizing_maybe_refresh_page_cache_dropin() {
+function wpoptimizing_page_cache_refresh_dropin() {
 	// Not served here (a network, in the free edition): ours goes, and a site whose switch was left
 	// on by Pro is switched off quietly. Nobody took its place, so no «replaced by» notice.
 	if ( wpoptimizing_page_cache_unsupported() ) {
@@ -1680,9 +1796,9 @@ function wpoptimizing_maybe_refresh_page_cache_dropin() {
 		// when it is gone altogether (sites hit by the old clear() that deleted it).
 		$file    = wpoptimizing_page_cache_config_file();
 		$sidecar = '' !== $file && is_readable( $file ) ? include $file : null;
-		if ( is_array( $sidecar ) && ( ! isset( $sidecar['allowed_hosts'] ) || ! isset( $sidecar['ttl'] ) || ( ! empty( $sidecar['active'] ) && wpoptimizing_page_cache_allowed_hosts() !== (array) $sidecar['allowed_hosts'] ) ) ) {
+		if ( is_array( $sidecar ) && ( ! isset( $sidecar['allowed_hosts'] ) || ! isset( $sidecar['ttl'] ) || ( ! empty( $sidecar['active'] ) && ( wpoptimizing_page_cache_allowed_hosts() !== (array) $sidecar['allowed_hosts'] || wpoptimizing_page_cache_lang_codes() !== (array) ( $sidecar['lang_codes'] ?? array() ) ) ) ) ) {
 			// The hosts too: a language given its own domain in WPML or Polylang is cached from the
-			// next admin page load on, without saving the cache settings again.
+			// next admin page load on, without saving the cache settings again. And its ?lang= code.
 			wpoptimizing_page_cache_write_config( ! empty( $sidecar['active'] ) );
 		} elseif ( ! is_array( $sidecar ) && wpoptimizing_page_cache_is_active() ) {
 			wpoptimizing_page_cache_write_config( true );
@@ -1710,7 +1826,6 @@ function wpoptimizing_maybe_refresh_page_cache_dropin() {
 		wpoptimizing_page_cache_clear_network();
 	}
 }
-add_action( 'admin_init', 'wpoptimizing_maybe_refresh_page_cache_dropin' );
 
 /**
  * The build of the plugin a sidecar is written by: its version and the time this file and the
@@ -1753,7 +1868,14 @@ function wpoptimizing_page_cache_sidecar_catch_up() {
 	if ( ! is_array( $sidecar ) || ( isset( $sidecar['rev'] ) && wpoptimizing_page_cache_config_rev() === (string) $sidecar['rev'] ) ) {
 		return;
 	}
-	wpoptimizing_maybe_refresh_page_cache_dropin();
+	// The drop-in, wp-config.php and .htaccess are rewritten only by someone allowed to, or by
+	// WP-Cron: a visitor's request asks for that run and only writes the sidecar, which lives in
+	// the cache folder. Once the sidecar carries this build's 'rev', no later request gets here.
+	if ( wpoptimizing_page_cache_may_rewrite_files() ) {
+		wpoptimizing_page_cache_refresh_dropin();
+	} else {
+		wpoptimizing_page_cache_schedule_refresh();
+	}
 	// The refresher may have rewritten it already, or switched the cache off: read it again.
 	$sidecar = is_readable( $file ) ? include $file : null;
 	if ( is_array( $sidecar ) && ( ! isset( $sidecar['rev'] ) || wpoptimizing_page_cache_config_rev() !== (string) $sidecar['rev'] ) && wpoptimizing_page_cache_is_active() ) {
@@ -1779,6 +1901,11 @@ add_action( 'wp_loaded', 'wpoptimizing_page_cache_sidecar_catch_up' );
 function wpoptimizing_page_cache_after_plugin_deactivated( $plugin ) {
 	if ( false !== strpos( (string) $plugin, 'wpoptimizing' ) ) {
 		return; // Our own teardown has its own path (lifecycle.php).
+	}
+	// A plugin can deactivate itself (or another) on any request, a visitor's included: wp-config.php
+	// is only edited for someone who may manage the drop-in, or from WP-CLI.
+	if ( ! wpoptimizing_page_cache_may_rewrite_files() ) {
+		return;
 	}
 	if ( function_exists( 'wpoptimizing_load_lib' ) ) {
 		wpoptimizing_load_lib( 'includes/cache-leftovers.php' );
@@ -1856,6 +1983,11 @@ function wpoptimizing_page_cache_pro_leftovers() {
 	if ( function_exists( 'wpoptimizing_pc_static_apply' ) ) {
 		return;
 	}
+	// admin_init runs for admin-ajax.php and admin-post.php without a session too: .htaccess is
+	// only edited for someone who may manage the drop-in.
+	if ( ! wpoptimizing_page_cache_may_rewrite_files() ) {
+		return;
+	}
 	foreach ( array( 'wpoptimizing_page_cache_gc_hourly', 'wpoptimizing_page_cache_preload', 'wpoptimizing_page_cache_text_refresh' ) as $hook ) {
 		if ( wp_next_scheduled( $hook ) ) {
 			wp_clear_scheduled_hook( $hook );
@@ -1875,10 +2007,17 @@ function wpoptimizing_page_cache_pro_leftovers() {
 		if ( function_exists( 'wpoptimizing_load_lib' ) ) {
 			wpoptimizing_load_lib( 'includes/cleanup/backup-store.php' );
 		}
-		// No backup, no edit: the block stays and this is tried again on the next admin page.
-		if ( ! wp_is_writable( $path ) || ! function_exists( 'wpoptimizing_backup_file_first' ) || ! wpoptimizing_backup_file_first( $path, 'htaccess' ) || ! wpopt_pc_write_atomic( $path, $new ) ) {
+		// No backup, no edit: the block stays and this is tried again later. Not on the next admin
+		// page: every try makes a backup before it writes, and a write that keeps failing filled the
+		// Backups tab with copies of the same .htaccess, one per page load. A day between tries.
+		if ( get_transient( 'wpoptimizing_pc_leftovers_retry' ) ) {
 			return;
 		}
+		if ( ! wp_is_writable( $path ) || ! function_exists( 'wpoptimizing_backup_file_first' ) || ! wpoptimizing_backup_file_first( $path, 'htaccess' ) || ! wpopt_pc_write_atomic( $path, $new ) ) {
+			set_transient( 'wpoptimizing_pc_leftovers_retry', 1, DAY_IN_SECONDS );
+			return;
+		}
+		delete_transient( 'wpoptimizing_pc_leftovers_retry' );
 	}
 	if ( file_exists( WPOPT_PC_CACHE_DIR . '/.htaccess' ) ) {
 		wp_delete_file( WPOPT_PC_CACHE_DIR . '/.htaccess' );

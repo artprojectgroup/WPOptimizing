@@ -44,6 +44,13 @@ function wpopt_pc_default_config() {
 			'woocommerce_cart_hash',
 			// EDD does the same thing with its own cart.
 			'edd_items_in_cart',
+			/*
+			 * WooCommerce's «Recently viewed products» widget (and block) lists what THIS visitor
+			 * looked at, read from this cookie on every page that shows it. The cookie is only set
+			 * on a product page; the others answer without Set-Cookie, so the late gate never
+			 * notices and the first visitor's list was served to everybody.
+			 */
+			'woocommerce_recently_viewed',
 		),
 		// URI substrings/patterns that are never cached (feeds, embeds, the WP REST
 		// namespace). Checked as substrings against the path.
@@ -71,8 +78,18 @@ function wpopt_pc_default_config() {
 		 *
 		 * The sidecar can only ever ADD to this list, so a site that really wants to
 		 * cache a bounded parameter of its own can still do it — knowingly.
+		 *
+		 * `lang` is not here either. Without WPML or Polylang WordPress ignores it and answers
+		 * 200, so ?lang=zz-00000001, ?lang=zz-00000002… were each a new copy of the same page.
+		 * The sidecar adds it only when one of them is active, with its real languages in
+		 * 'lang_codes' (wpoptimizing_page_cache_lang_codes()).
 		 */
-		'query_whitelist'   => array( 'lang' ),
+		'query_whitelist'   => array(),
+		/*
+		 * The language codes the active multilingual plugin answers to ?lang= with, lower case. A
+		 * value outside this list is rendered uncached (wpopt_pc_query_value_ok()). Empty: none.
+		 */
+		'lang_codes'        => array(),
 		/*
 		 * REST API routes stored like pages, for anonymous GETs only (Pro, the site's own list:
 		 * «Cache these REST API routes»). Empty by default: a route's answer may depend on the
@@ -391,7 +408,7 @@ function wpopt_pc_query_ok( $query, $config ) {
 		if ( ! in_array( $key, $whitelist, true ) ) {
 			return false; // A non-whitelisted, non-ignored param → don't cache.
 		}
-		if ( ! wpopt_pc_query_value_ok( $key, $value ) ) {
+		if ( ! wpopt_pc_query_value_ok( $key, $value, $config ) ) {
 			return false;
 		}
 	}
@@ -402,45 +419,106 @@ function wpopt_pc_query_ok( $query, $config ) {
  * Is a whitelisted parameter's value one the cache may file? Pure.
  *
  * Every distinct value gets its own cache file, so a parameter whose values are unbounded lets a
- * visitor fill the disk (the same reason `s` is not whitelisted). `lang` only ever carries a
- * language code (fr, pt-br, zh-hans), so anything else is rendered uncached. An array value
- * (lang[]=x) is never a language either.
+ * visitor fill the disk (the same reason `s` is not whitelisted). A language-code pattern was not
+ * enough for `lang`: it still let through some 10^16 values (and every mix of upper and lower case
+ * of each), and a site without WPML or Polylang renders all of them as the same 200 page. So the
+ * value has to be one of the languages the site really has ('lang_codes' in the sidecar), exactly
+ * as that plugin writes it, lower case: ?lang=FR is rendered, uncached. A sidecar without the list
+ * caches no ?lang= at all. An array value (lang[]=x) is never a language either.
  *
- * @param string $key   Parameter name.
- * @param mixed  $value Parameter value.
+ * @param string $key    Parameter name.
+ * @param mixed  $value  Parameter value.
+ * @param array  $config Merged config.
  * @return bool
  */
-function wpopt_pc_query_value_ok( $key, $value ) {
+function wpopt_pc_query_value_ok( $key, $value, $config = array() ) {
 	if ( 'lang' !== $key ) {
 		return true; // A parameter the site added itself: that decision was taken knowingly.
 	}
-	return is_string( $value ) && 1 === preg_match( '/^[a-z]{2,3}(?:-[a-z0-9]{2,8})?$/i', $value );
+	if ( ! is_string( $value ) || 1 !== preg_match( '/^[a-z]{2,3}(?:-[a-z0-9]{2,8})?$/', $value ) ) {
+		return false;
+	}
+	$codes = isset( $config['lang_codes'] ) ? array_map( 'strval', (array) $config['lang_codes'] ) : array();
+	return in_array( $value, $codes, true );
 }
 
 /**
  * Is this request's Host header one the install actually answers to? Pure.
  *
- * The cache path is keyed by host, so an unvalidated Host header lets a visitor create an
- * unbounded number of cache directories. When the sidecar carries no host list (a config
- * written by an older version) we fail OPEN, so upgrading never turns caching off.
+ * See wpopt_pc_allowed_host(): true exactly when it finds the host in the list.
  *
  * @param string $host   Raw Host header (may carry a port).
  * @param array  $config Merged config.
  * @return bool
  */
 function wpopt_pc_host_ok( $host, $config ) {
+	return '' !== wpopt_pc_allowed_host( $host, $config );
+}
+
+/**
+ * The cache's name for this request's host, taken from the list of hosts the install answers to,
+ * or '' when the request must not be cached. Pure.
+ *
+ * The cache folder is named after the host, so it has to be built from this answer and never from
+ * the raw header. The check used to compare only what came before the first «:», while the folder
+ * kept the rest with the colons taken out: «example.com:abc» or «example.com:100000» (a header
+ * parse_url() refuses, which WordPress neither redirects nor rejects) passed and made a new folder
+ * each, «example.comabc/», «example.com100000/»… without end. Now only «host» or «host:port» are
+ * accepted, the port a plain number from 1 to 65535 without leading zeros (80 and 443 are the
+ * host itself, as WordPress reads them); anything else, or a host not in the list, is not cached.
+ *
+ * A list entry with a port only matches that port; one without, any valid port. An EMPTY list
+ * caches nothing: it used to let any Host through, «..» included, which named a folder one level
+ * above the cache's (a filter returning array() is enough to get there). A sidecar written before
+ * the list existed is rewritten by the plugin on its next request (wpoptimizing_page_cache_sidecar_catch_up()).
+ *
+ * @param string $host   Raw Host header (may carry a port).
+ * @param array  $config Merged config.
+ * @return string Lower-case «host» or «host:port», or ''.
+ */
+function wpopt_pc_allowed_host( $host, $config ) {
 	$allowed = isset( $config['allowed_hosts'] ) ? (array) $config['allowed_hosts'] : array();
-	if ( array() === $allowed ) {
-		return true;
+	$asked   = wpopt_pc_split_host( $host );
+	if ( array() === $allowed || null === $asked ) {
+		return '';
 	}
-	$host = strtolower( (string) $host );
-	$host = explode( ':', $host, 2 )[0]; // Drop the port.
 	foreach ( $allowed as $candidate ) {
-		if ( strtolower( (string) $candidate ) === $host ) {
-			return true;
+		$entry = wpopt_pc_split_host( (string) $candidate );
+		if ( null === $entry || $entry[0] !== $asked[0] ) {
+			continue;
 		}
+		if ( 0 !== $entry[1] && $entry[1] !== $asked[1] ) {
+			continue;
+		}
+		// The list's spelling of the name, the port as a number: one folder per real address.
+		return $entry[0] . ( 0 !== $asked[1] ? ':' . $asked[1] : '' );
 	}
-	return false;
+	return '';
+}
+
+/**
+ * A Host header (or a list entry) split into its name and its port. Pure.
+ *
+ * Only «name» or «name:port»: a name of the characters a host can carry (an IPv6 address between
+ * brackets too), never empty nor made only of dots, and a port from 1 to 65535 written without
+ * leading zeros. 80 and 443 count as no port, as WordPress strips them (ms-settings.php).
+ *
+ * @param string $host Host header or list entry.
+ * @return array{0:string,1:int}|null Lower-case name and port (0 = none), or null when malformed.
+ */
+function wpopt_pc_split_host( $host ) {
+	$host = strtolower( trim( (string) $host ) );
+	if ( 1 !== preg_match( '/^(\[[0-9a-f:.]+\]|[a-z0-9_.\-]+)(?::([1-9][0-9]{0,4}))?$/', $host, $m ) || '' === trim( $m[1], '.' ) ) {
+		return null;
+	}
+	$port = isset( $m[2] ) ? (int) $m[2] : 0;
+	if ( $port > 65535 ) {
+		return null;
+	}
+	if ( 80 === $port || 443 === $port ) {
+		$port = 0;
+	}
+	return array( $m[1], $port );
 }
 
 /*
@@ -581,7 +659,7 @@ function wpopt_pc_early_reason( $method, $request_uri, $cookie_header, $ua, $con
  * @param string $buffer    Rendered HTML.
  * @param array  $flags     { is_admin, is_404, is_search, is_feed, donotcachepage,
  *                            is_user_logged_in, is_rejected_page, is_rejected_type,
- *                            sets_cookie, forbids_store } booleans.
+ *                            sets_cookie, forbids_store, is_html } booleans.
  * @return bool
  */
 function wpopt_pc_can_store( $http_code, $buffer, $flags ) {
@@ -647,6 +725,11 @@ function wpopt_pc_late_reason( $http_code, $buffer, $flags ) {
 	// or XML it is meant to be. A theme's 404 page or an empty answer under that address is not.
 	if ( ! empty( $flags['is_text'] ) ) {
 		return ! empty( $flags['text_type_ok'] ) && '' !== trim( $buffer ) ? '' : 'nothtml';
+	}
+	// Sent as HTML (wpopt_pc_response_is_html()). A drop-in from before this flag does not pass
+	// it, and keeps the old check alone.
+	if ( isset( $flags['is_html'] ) && ! $flags['is_html'] ) {
+		return 'nothtml';
 	}
 	// Must look like a full HTML document.
 	if ( strlen( $buffer ) < 255 || false === stripos( $buffer, '</html>' ) ) {
@@ -1138,7 +1221,7 @@ function wpopt_pc_cron_spawn( $sidecar ) {
 			return;
 		}
 		clearstatcache( true, $base . '/.cron-spawn' );
-		if ( (int) @filemtime( $base . '/.cron-spawn' ) > $now - 60 || ! @touch( $base . '/.cron-spawn', $now ) ) { // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- Missing on the first call.
+		if ( (int) @filemtime( $base . '/.cron-spawn' ) > $now - 60 || ! @touch( $base . '/.cron-spawn', $now ) ) { // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged, WordPress.WP.AlternativeFunctions.file_system_operations_touch -- Missing on the first call; the drop-in runs before WP_Filesystem exists.
 			wpopt_pc_release_lock( $lock );
 			return;
 		}
@@ -1313,6 +1396,30 @@ function wpopt_pc_response_forbids_store( $headers ) {
 }
 
 /**
+ * Is this response an HTML page? Pure.
+ *
+ * A hit is always sent back as text/html, so anything else stored here came back under the wrong
+ * type: a plugin answering a front-end URL with JSON, a CSV, an image or a download through
+ * template_redirect, with «</html>» somewhere in it, was served to every later visitor as a page.
+ * No Content-Type header means PHP's own default, text/html. Only the last one counts, as header()
+ * replaces the earlier ones. The REST routes and text files that Pro stores on purpose do not
+ * come here: the late gate judges them first, by their own rules.
+ *
+ * @param array $headers Output of headers_list().
+ * @return bool
+ */
+function wpopt_pc_response_is_html( $headers ) {
+	$type = '';
+	foreach ( (array) $headers as $header ) {
+		$header = (string) $header;
+		if ( 0 === stripos( $header, 'content-type:' ) ) {
+			$type = strtolower( trim( (string) strtok( substr( $header, 13 ), ';' ) ) );
+		}
+	}
+	return '' === $type || 'text/html' === $type;
+}
+
+/**
  * Filesystem path of the cache file for a request. Layout mirrors WP Rocket:
  *   <base>/<host>/<uri>/index<-variant>.html
  * Each URI segment goes through wpopt_pc_path_segment(), which prevents traversal and keeps two
@@ -1329,6 +1436,12 @@ function wpopt_pc_response_forbids_store( $headers ) {
  */
 function wpopt_pc_cache_file( $base_dir, $host, $path, $variant = '', $gzip = false ) {
 	$host = strtolower( preg_replace( '/[^a-z0-9\.\-]/i', '', (string) $host ) );
+	// Never a folder named «», «.» or «..»: the copy would land in the cache folder itself or one
+	// level above it. The drop-in only passes hosts from the allowed list (wpopt_pc_allowed_host()),
+	// so this name is never asked for; it is only the last line, for any caller.
+	if ( '' === trim( $host, '.' ) ) {
+		$host = '_';
+	}
 	$path = (string) $path;
 	// Strip query, decode once, then map every segment to a safe directory name.
 	$path = rawurldecode( $path );
@@ -1854,6 +1967,35 @@ function wpopt_pc_send_hit( $file, $encoding, $mtime, $now, $ttl, $edge, $server
 function wpopt_pc_variant_room( $plain, $cap = 24 ) {
 	$found = glob( dirname( (string) $plain ) . '/index*-c*.html' );
 	return ! is_array( $found ) || count( $found ) < (int) $cap || in_array( (string) $plain, $found, true );
+}
+
+/**
+ * Room for one more query-string variant of a URL? The same cap as the price variants', for the
+ * whitelisted parameters («-q…» copies). Each parameter is already held to bounded values
+ * (wpopt_pc_query_value_ok() for `lang`), but a parameter the site added itself is taken on
+ * trust, and no URL needs more than a few dozen versions of its query string: past that, someone
+ * is inventing them. Counted by query string, not by file, so the https and phone copies of one
+ * language take one place, not four. Pure apart from the directory listing.
+ *
+ * @param string $plain Path of the copy about to be written.
+ * @param int    $cap   Query strings allowed per URL.
+ * @return bool
+ */
+function wpopt_pc_query_room( $plain, $cap = 32 ) {
+	if ( 1 !== preg_match( '/-q([a-f0-9]{12})/', basename( (string) $plain ), $own ) ) {
+		return true; // Not a query variant.
+	}
+	$found = glob( dirname( (string) $plain ) . '/index*-q*.html' );
+	if ( ! is_array( $found ) ) {
+		return true;
+	}
+	$keys = array();
+	foreach ( $found as $file ) {
+		if ( 1 === preg_match( '/-q([a-f0-9]{12})/', basename( $file ), $m ) ) {
+			$keys[ $m[1] ] = true;
+		}
+	}
+	return isset( $keys[ $own[1] ] ) || count( $keys ) < (int) $cap;
 }
 
 

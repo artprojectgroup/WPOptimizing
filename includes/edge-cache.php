@@ -409,9 +409,7 @@ function wpoptimizing_varnish_register_content_hooks() {
 	foreach ( $hooks as $hook ) {
 		add_action( $hook, 'wpoptimizing_varnish_queue_post' );
 	}
-	foreach ( array( 'comment_post', 'wp_set_comment_status', 'edit_comment' ) as $hook ) {
-		add_action( $hook, 'wpoptimizing_varnish_queue_comment' );
-	}
+	wpoptimizing_content_register_comment_hooks( 'wpoptimizing_varnish_queue_comment' );
 	// Stock and sales: the product page and its listings, like a save.
 	if ( function_exists( 'wpoptimizing_content_product_hooks' ) ) {
 		foreach ( wpoptimizing_content_product_hooks() as $hook ) {

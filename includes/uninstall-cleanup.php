@@ -37,6 +37,7 @@ function wpoptimizing_uninstall_cron_hooks() {
 		'wpoptimizing_kb_sync_cron',
 		'wpoptimizing_license_heartbeat',
 		'wpoptimizing_page_cache_gc',
+		'wpoptimizing_page_cache_refresh_dropin',
 		'wpoptimizing_page_cache_text_refresh',
 		'wpoptimizing_page_cache_gc_hourly',
 		'wpoptimizing_page_cache_preload',

@@ -366,6 +366,68 @@ function wpoptimizing_content_capture_term_change( $object_id, $terms = array(),
 }
 
 /**
+ * Purge a post's pages when one of its comments shows up on them or stops showing: hook a
+ * purger's «comment id» callback to the three moments that can do it. One rule for every purger.
+ *
+ * A comment that waits for moderation, or goes straight to spam, changes no page anyone sees.
+ * They used to purge anyway — comment_post fires for every one of them — so a spam bot posting
+ * to a post emptied its copies (and asked Cloudflare, Varnish and the hosting to do the same)
+ * as fast as it posted. Now: a new comment only when it is published at once; a status change
+ * only when it enters or leaves «approved» (transition_comment_status, which also says what it
+ * was before, unlike wp_set_comment_status); an edit only of a published comment.
+ *
+ * @param callable $callback Called with the comment id.
+ * @return void
+ */
+function wpoptimizing_content_register_comment_hooks( $callback ) {
+	add_action(
+		'comment_post',
+		static function ( $comment_id, $approved = 0 ) use ( $callback ) {
+			if ( 1 === (int) $approved ) { // 0 waits for moderation; 'spam' and 'trash' are 0 too.
+				call_user_func( $callback, (int) $comment_id );
+			}
+		},
+		10,
+		2
+	);
+	add_action(
+		'transition_comment_status',
+		static function ( $new_status, $old_status, $comment ) use ( $callback ) {
+			if ( is_object( $comment ) && ! empty( $comment->comment_ID ) && wpoptimizing_content_comment_status_shows( $new_status, $old_status ) ) {
+				call_user_func( $callback, (int) $comment->comment_ID );
+			}
+		},
+		10,
+		3
+	);
+	add_action(
+		'edit_comment',
+		static function ( $comment_id ) use ( $callback ) {
+			$comment = function_exists( 'get_comment' ) ? get_comment( $comment_id ) : null;
+			if ( $comment && '1' === (string) $comment->comment_approved ) {
+				call_user_func( $callback, (int) $comment_id );
+			}
+		}
+	);
+}
+
+/**
+ * Does a comment's change of status change what its post's pages show? Pure.
+ *
+ * Only when it enters or leaves «approved» (published): «unapproved», «spam», «trash» and a
+ * deletion («delete») are all invisible, so going from one of them to another changes nothing.
+ *
+ * @param string $new_status New status (transition_comment_status).
+ * @param string $old_status Old status.
+ * @return bool
+ */
+function wpoptimizing_content_comment_status_shows( $new_status, $old_status ) {
+	$new_status = (string) $new_status;
+	$old_status = (string) $old_status;
+	return $new_status !== $old_status && ( 'approved' === $new_status || 'approved' === $old_status );
+}
+
+/**
  * The hooks after which a post's URLs are stale. One list for the three per-URL purgers.
  *
  * @return string[]
