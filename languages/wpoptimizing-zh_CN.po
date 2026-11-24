@@ -14628,3 +14628,33 @@ msgstr "若要让带推广参数（utm_*、gclid…）的访问也从那里提�
 msgid "Transform Rules"
 msgstr "Transform Rules"
 
+#: includes/admin/trait-cache.php
+msgid "The page cache is not available on a multisite network."
+msgstr "多站点网络不提供页面缓存。"
+
+#: includes/admin/trait-cache.php
+msgid "On a multisite network the page cache is part of Pro and needs an active license."
+msgstr "在多站点网络中，页面缓存属于 Pro，需要有效的许可证。"
+
+#: includes/admin/trait-cache.php
+msgid "Preloading, serving pages without PHP, Brotli copies, HTML minification, hit diagnostics, caching text files and REST routes, and page caching at Cloudflare's edge are not included in this plugin."
+msgstr "预加载、不经 PHP 提供页面、Brotli 副本、HTML 压缩、命中诊断、缓存文本文件和 REST 路由，以及在 Cloudflare 边缘缓存页面，均不包含在此插件中。"
+
+#: includes/admin/trait-cache.php
+msgid "Pro adds preloading, serving pages without PHP, Brotli copies, HTML minification, hit diagnostics, caching text files and REST routes, and page caching at Cloudflare's edge."
+msgstr "Pro 增加了预加载、不经 PHP 提供页面、Brotli 副本、HTML 压缩、命中诊断、缓存文本文件和 REST 路由，以及在 Cloudflare 边缘缓存页面。"
+
+#. translators: %s: the other plugin's setting, e.g. "Preload cache".
+#: includes/importers/importer.php
+#, php-format
+msgid "%s: not imported, this edition of WPOptimizing does not have it."
+msgstr "%s：未导入，此版本的 WPOptimizing 不具备该功能。"
+
+#: includes/admin/class-help.php
+msgid "serves a static copy of each page to anonymous visitors, for 10 hours by default (from 1 to 12), and clears what changes. Logged-in users, carts, checkout and the admin are never cached. Enabling it writes wp-content/advanced-cache.php and adds WP_CACHE to wp-config.php. It stays off while another page cache is active, and it is not available on a multisite network."
+msgstr "向匿名访客提供每个页面的静态副本，默认保留 10 小时（可设 1 到 12 小时），并清除发生变化的内容。已登录用户、购物车、结账和后台永不缓存。启用后会写入 wp-content/advanced-cache.php 并在 wp-config.php 中添加 WP_CACHE。当另一个页面缓存处于活动状态时它保持关闭，且在多站点网络中不可用。"
+
+#: includes/admin/class-help.php
+msgid "serves a static copy of each page to anonymous visitors, for 10 hours by default (from 1 to 12), and clears what changes. Logged-in users, carts, checkout and the admin are never cached. Enabling it writes wp-content/advanced-cache.php and adds WP_CACHE to wp-config.php. It stays off while another page cache is active; on a multisite network, a network administrator turns it on site by site."
+msgstr "向匿名访客提供每个页面的静态副本，默认保留 10 小时（可设 1 到 12 小时），并清除发生变化的内容。已登录用户、购物车、结账和后台永不缓存。启用后会写入 wp-content/advanced-cache.php 并在 wp-config.php 中添加 WP_CACHE。当另一个页面缓存处于活动状态时它保持关闭；在多站点网络中，由网络管理员逐个站点启用。"
+

@@ -686,6 +686,11 @@ class WPOPT_Admin_UI {
 			|| isset( $_REQUEST['wpopt_browsercache_apply'] ) || isset( $_REQUEST['wpopt_browsercache_remove'] )
 			|| isset( $_REQUEST['wpopt_cache_leftovers_clean'] )
 			|| isset( $_REQUEST['wpopt_assetmin_save'] )
+			// The basic page cache is in both editions (24/11/2026).
+			|| isset( $_REQUEST['wpopt_pagecache_install'] ) || isset( $_REQUEST['wpopt_pagecache_uninstall'] ) || isset( $_REQUEST['wpopt_pagecache_replace'] )
+			|| isset( $_REQUEST['wpopt_pagecache_flush'] )
+			|| isset( $_REQUEST['wpopt_pagecache_settings_save'] )
+			|| isset( $_REQUEST['wpopt_pagecache_exclusions'] )
 			|| isset( $_REQUEST['wpopt_perf_heartbeat'] ) || isset( $_REQUEST['wpopt_perf_heartbeat_zones'] )
 			|| isset( $_REQUEST['wpopt_psi_run'] ) || isset( $_REQUEST['wpopt_psi_key_save'] ) || isset( $_REQUEST['wpopt_crux_run'] )
 			|| isset( $_REQUEST['wpopt_frontend_save'] ) ) {
@@ -699,6 +704,18 @@ class WPOPT_Admin_UI {
 				$this->install_db_dropin( isset( $_REQUEST['wpopt_cache_db_replace'] ) );
 			} elseif ( isset( $_REQUEST['wpopt_cache_db_uninstall'] ) ) {
 				$this->uninstall_db_dropin();
+			} elseif ( isset( $_REQUEST['wpopt_pagecache_install'] ) || isset( $_REQUEST['wpopt_pagecache_replace'] ) ) {
+				$this->cache_page_install( isset( $_REQUEST['wpopt_pagecache_replace'] ) );
+			} elseif ( isset( $_REQUEST['wpopt_pagecache_uninstall'] ) ) {
+				$this->cache_page_uninstall();
+			} elseif ( isset( $_REQUEST['wpopt_pagecache_flush'] ) ) {
+				$this->cache_page_flush();
+			} elseif ( isset( $_REQUEST['wpopt_pagecache_settings_save'] ) ) {
+				// The page cache screen's single form: the settings, and in Pro the preload. Each part
+				// only when it was on the form, so a hidden part is never saved as empty.
+				if ( isset( $_REQUEST['wpopt_pc_reject_uri'] ) ) {
+					$this->cache_page_save_exclusions();
+				}
 			} elseif ( isset( $_REQUEST['wpopt_edge_check'] ) || isset( $_REQUEST['wpopt_edge_save'] ) ) {
 				$this->cache_edge_action( isset( $_REQUEST['wpopt_edge_check'] ) );
 			} elseif ( isset( $_REQUEST['wpopt_browsercache_apply'] ) ) {
@@ -707,6 +724,8 @@ class WPOPT_Admin_UI {
 				$this->cache_browser_apply( false );
 			} elseif ( isset( $_REQUEST['wpopt_cache_leftovers_clean'] ) ) {
 				$this->cache_leftovers_clean();
+			} elseif ( isset( $_REQUEST['wpopt_pagecache_exclusions'] ) ) {
+				$this->cache_page_save_exclusions();
 			} elseif ( isset( $_REQUEST['wpopt_frontend_save'] ) ) {
 				$this->save_frontend_perf_from_post();
 			} elseif ( isset( $_REQUEST['wpopt_assetmin_save'] ) ) {
@@ -738,6 +757,12 @@ class WPOPT_Admin_UI {
 				'tab'  => $ret_tab,
 			);
 			// Page-cache actions land back on the page sub-section.
+			if ( isset( $_REQUEST['wpopt_pagecache_install'] ) || isset( $_REQUEST['wpopt_pagecache_replace'] ) || isset( $_REQUEST['wpopt_pagecache_uninstall'] ) || isset( $_REQUEST['wpopt_pagecache_flush'] )
+				|| isset( $_REQUEST['wpopt_pagecache_exclusions'] )
+				|| isset( $_REQUEST['wpopt_pagecache_settings_save'] )
+				) {
+				$args['csec'] = 'page';
+			}
 			// Browser cache and the caches in front of the site: Cache › Browser & server.
 			if ( isset( $_REQUEST['wpopt_browsercache_apply'] ) || isset( $_REQUEST['wpopt_browsercache_remove'] )
 				|| isset( $_REQUEST['wpopt_edge_check'] ) || isset( $_REQUEST['wpopt_edge_save'] ) ) {

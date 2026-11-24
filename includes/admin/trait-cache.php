@@ -891,6 +891,86 @@ trait WPOptimizing_Cache_Trait {
 
 
 	/**
+	 * Enable the page cache (install advanced-cache.php + WP_CACHE), refusing to run
+	 * alongside a third-party page cache. The basic page cache is in both editions (24/11/2026).
+	 *
+	 * @param bool $replace Take the slot of a foreign advanced-cache.php.
+	 * @return void
+	 */
+	protected function cache_page_install( $replace = false ) {
+		if ( ! $this->can_manage_dropin() ) {
+			$this->cache_flash( __( 'You do not have permission to manage the page cache.', 'wpoptimizing' ), 'error' );
+			return;
+		}
+		$r    = wpoptimizing_page_cache_install( $replace );
+		$code = isset( $r['code'] ) ? (string) $r['code'] : '';
+		if ( ! empty( $r['ok'] ) ) {
+			$this->cache_flash( __( 'Page cache enabled.', 'wpoptimizing' ), 'updated' );
+		} elseif ( 'unsupported' === $code ) {
+			$this->cache_flash( __( 'The page cache is not available on a multisite network.', 'wpoptimizing' ), 'warning' );
+		} elseif ( 'multisite' === $code ) {
+			$this->cache_flash( __( 'The page cache is not available for this site: its address cannot be used to name its cache files.', 'wpoptimizing' ), 'warning' );
+		} elseif ( 'foreign_dropin' === $code ) {
+			$this->cache_flash( __( 'An advanced-cache.php from another plugin is already active. WPOptimizing will not overwrite it.', 'wpoptimizing' ), 'warning' );
+		} elseif ( 'nobackup' === $code ) {
+			$this->cache_flash( __( 'The other advanced-cache.php could not be copied aside, so it was left in place.', 'wpoptimizing' ), 'error' );
+		} elseif ( 'conflict' === $code ) {
+			$names = ( ! empty( $r['co']['caches'] ) ) ? implode( ', ', $r['co']['caches'] ) : '';
+			$this->cache_flash(
+				sprintf(
+					/* translators: %s: detected page-cache plugin names. */
+					__( 'Another page cache is active (%s). Disable it before enabling ours.', 'wpoptimizing' ),
+					$names
+				),
+				'warning'
+			);
+		} elseif ( 'host_cache' === $code ) {
+			$this->cache_flash(
+				sprintf(
+					/* translators: %s: hosting or server cache names, e.g. WP Engine. */
+					__( 'Your hosting already keeps a copy of every page (%s), and WPOptimizing cannot clear it. A second page cache would leave visitors seeing old pages after each change, so it was not enabled. The object cache and the other speed-ups still work alongside it.', 'wpoptimizing' ),
+					implode( ', ', (array) ( $r['hosts'] ?? array() ) )
+				),
+				'warning'
+			);
+		} elseif ( 'wpconfig-nobackup' === $code ) {
+			$this->cache_flash( wpoptimizing_backup_failure_message( wpoptimizing_backup_failure() ), 'error' );
+		} elseif ( 0 === strpos( $code, 'wpconfig-' ) ) {
+			$this->cache_flash( __( 'Could not edit wp-config.php to define WP_CACHE. Check file permissions.', 'wpoptimizing' ), 'error' );
+		} else {
+			$this->cache_flash( __( 'Could not install advanced-cache.php. Check wp-content permissions.', 'wpoptimizing' ), 'error' );
+		}
+	}
+
+	/**
+	 * Disable the page cache (remove OUR advanced-cache.php + WP_CACHE, clear the cache).
+	 *
+	 * @return void
+	 */
+	protected function cache_page_uninstall() {
+		if ( ! $this->can_manage_dropin() ) {
+			$this->cache_flash( __( 'You do not have permission to manage the page cache.', 'wpoptimizing' ), 'error' );
+			return;
+		}
+		$r = wpoptimizing_page_cache_uninstall();
+		$this->cache_flash( $this->with_restored( __( 'Page cache disabled.', 'wpoptimizing' ), (string) ( $r['restored'] ?? '' ) ), 'updated' );
+	}
+
+	/**
+	 * Clear all cached page files.
+	 *
+	 * @return void
+	 */
+	protected function cache_page_flush() {
+		if ( ! $this->can_manage_dropin() ) {
+			$this->cache_flash( __( 'You do not have permission to manage the page cache.', 'wpoptimizing' ), 'error' );
+			return;
+		}
+		wpoptimizing_page_cache_clear();
+		$this->cache_flash( __( 'Page cache cleared.', 'wpoptimizing' ), 'updated' );
+	}
+
+	/**
 	 * Add or remove the browser-cache / GZIP .htaccess block.
 	 *
 	 * @param bool $enable True to add the rules, false to remove them.
@@ -1018,8 +1098,167 @@ trait WPOptimizing_Cache_Trait {
 	}
 
 
+	/**
+	 * Save the page-cache settings of the screen's single form and refresh the precompiled
+	 * config. The basic ones (lifetime, gzip, exclusions, page types, phone copies) are in both
+	 * editions; what Pro adds is saved only by Pro with a license, so a form without those fields
+	 * never wipes them.
+	 *
+	 * @return void
+	 */
+	protected function cache_page_save_exclusions() {
+		if ( ! $this->can_manage_dropin() ) {
+			$this->cache_flash( __( 'You do not have permission to manage the page cache.', 'wpoptimizing' ), 'error' );
+			return;
+		}
+		$opt = (array) get_option( 'wpoptimizing_page_cache', array() );
+		$map = array(
+			'reject_uri'      => 'wpopt_pc_reject_uri',
+			'reject_cookies'  => 'wpopt_pc_reject_cookies',
+			'query_whitelist' => 'wpopt_pc_query_whitelist',
+			'reject_ua'       => 'wpopt_pc_reject_ua',
+			'ignored_query'   => 'wpopt_pc_ignored_query',
+		);
+		foreach ( $map as $key => $field ) {
+			$raw         = isset( $_REQUEST[ $field ] ) ? (string) wp_unslash( $_REQUEST[ $field ] ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- nonce checked by the shared cache action handler; sanitized on the next lines (split + sanitize_text_field).
+			$lines       = preg_split( '/[\r\n]+/', $raw );
+			$lines       = array_values( array_filter( array_map( 'sanitize_text_field', array_map( 'trim', (array) $lines ) ) ) );
+			$opt[ $key ] = $lines;
+		}
+		$opt['mobile_separate'] = ! empty( $_REQUEST['wpopt_pc_mobile_separate'] ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- nonce checked by the shared cache action handler; only its presence is read.
+		// Page lifetime, in whole hours through the shared policy (the importers use the same one).
+		// The sidecar rewritten below carries it; the purge below drops the copies kept under the
+		// old lifetime.
+		if ( isset( $_REQUEST['wpopt_pc_ttl_hours'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- nonce checked by the shared cache action handler.
+			$opt['ttl'] = wpoptimizing_page_cache_ttl_policy( absint( $_REQUEST['wpopt_pc_ttl_hours'] ) * HOUR_IN_SECONDS )['ttl']; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- nonce checked by the shared cache action handler; absint() is the sanitizer.
+		}
+		// Compressed copies. The engine reads 'gzip' from the sidecar; the purge below removes the
+		// .gz files when it is switched off.
+		$opt['gzip'] = ! empty( $_REQUEST['wpopt_pc_gzip'] ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- nonce checked by the shared cache action handler; only its presence is read.
+		// Page types never cached. Saved even with the cache off; the purge below is what makes a
+		// newly excluded type stop being served now (a HIT is answered before any of this runs).
+		foreach ( array( 'reject_front', 'reject_home', 'reject_archives', 'reject_paged' ) as $key ) {
+			$opt[ $key ] = ! empty( $_REQUEST[ 'wpopt_pc_' . $key ] ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- nonce checked by the shared cache action handler; only its presence is read.
+		}
+		$public_types = get_post_types( array( 'public' => true ) );
+		$posted_types = isset( $_REQUEST['wpopt_pc_reject_post_types'] ) ? array_map( 'sanitize_key', (array) wp_unslash( $_REQUEST['wpopt_pc_reject_post_types'] ) ) : array(); // phpcs:ignore WordPress.Security.NonceVerification.Recommended, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- nonce checked by the shared cache action handler; every item goes through sanitize_key().
+		// Only types this site shows publicly: anything else posted is not a choice the form offered.
+		$opt['reject_post_types'] = array_values( array_intersect( array_unique( $posted_types ), array_diff( array_keys( $public_types ), array( 'attachment' ) ) ) );
+		$always                   = array( 'rejected' => array() );
+		update_option( 'wpoptimizing_page_cache', $opt, false );
+		if ( wpoptimizing_page_cache_is_active() ) {
+			wpoptimizing_page_cache_write_config( true );
+			// A page just excluded may already have a copy (and a twin the web server serves):
+			// the exclusions apply now, not when that copy expires.
+			wpoptimizing_page_cache_clear();
+		}
+		if ( $always['rejected'] ) {
+			$this->cache_flash(
+				sprintf(
+					/* translators: %s: list of the entries left out. */
+					__( 'Page cache settings saved, except these addresses to purge too, which are not pages of this site: %s', 'wpoptimizing' ),
+					implode( ', ', array_slice( $always['rejected'], 0, 10 ) ) . ( count( $always['rejected'] ) > 10 ? ' …' : '' )
+				),
+				'warning'
+			);
+			return;
+		}
+		$this->cache_flash( __( 'Page cache settings saved.', 'wpoptimizing' ), 'updated' );
+	}
 
 
+
+	/**
+	 * The page-type exclusions of the page cache: front page, posts page, archives, pagination
+	 * and chosen content types. Part of the custom-exclusions form (cache_page_save_exclusions()).
+	 *
+	 * @param array $pcopt Page-cache option.
+	 * @return void
+	 */
+	protected function render_page_type_exclusions( array $pcopt ) {
+		$this->render_subsection_header(
+			__( 'Page types', 'wpoptimizing' ),
+			__( 'Pages of the kinds ticked here are never cached. Saving empties the whole cache, so copies already stored stop being served at once.', 'wpoptimizing' )
+		);
+		$boxes = array(
+			'reject_front'    => __( 'Front page', 'wpoptimizing' ),
+			'reject_home'     => __( 'Posts page (the blog listing, when it is not the front page)', 'wpoptimizing' ),
+			'reject_archives' => __( 'Archives: categories, tags, authors, dates, custom taxonomies and content type listings', 'wpoptimizing' ),
+			'reject_paged'    => __( 'Second and later pages of any listing', 'wpoptimizing' ),
+		);
+		foreach ( $boxes as $key => $label ) {
+			echo '<p><label><input type="checkbox" name="' . esc_attr( 'wpopt_pc_' . $key ) . '" value="1"' . checked( ! empty( $pcopt[ $key ] ), true, false ) . ' /> ' . esc_html( $label ) . '</label></p>';
+		}
+		$chosen = isset( $pcopt['reject_post_types'] ) ? array_map( 'strval', (array) $pcopt['reject_post_types'] ) : array();
+		echo '<p><label for="wpopt_pc_reject_post_types"><strong>' . esc_html__( 'Never cache single pages of these content types', 'wpoptimizing' ) . '</strong></label></p>';
+		echo '<div class="wpopt-select-290">';
+		echo '<select id="wpopt_pc_reject_post_types" name="wpopt_pc_reject_post_types[]" class="wpopt-select2" multiple="multiple" data-placeholder="' . esc_attr__( 'None', 'wpoptimizing' ) . '">';
+		foreach ( get_post_types( array( 'public' => true ), 'objects' ) as $type => $obj ) {
+			if ( 'attachment' === $type ) {
+				continue; // Attachment pages are not part of the preload or of most sites' content.
+			}
+			$name = isset( $obj->labels->name ) ? (string) $obj->labels->name : (string) $type;
+			echo '<option value="' . esc_attr( $type ) . '"' . selected( in_array( (string) $type, $chosen, true ), true, false ) . '>' . esc_html( $name . ' (' . $type . ')' ) . '</option>';
+		}
+		echo '</select>';
+		echo '</div>';
+	}
+
+	/**
+	 * Page lifetime and compressed copies (both editions); Brotli, preload hints and the pages
+	 * purged with every purge (Pro, with a license). Part of the
+	 * page-cache settings form (cache_page_save_exclusions() saves them).
+	 *
+	 * @param array $pcopt Page-cache option.
+	 * @return void
+	 */
+	protected function render_page_cache_lifetime( array $pcopt ) {
+		$this->render_subsection_header(
+			__( 'Page lifetime', 'wpoptimizing' ),
+			__( 'How long a cached page is served before it is built again. Forms, «add to cart» and many buttons carry WordPress security tokens that stop working after 12 to 24 hours, so pages are never kept longer than 12 hours: older copies would show forms and buttons that fail. Saving empties the cache.', 'wpoptimizing' )
+		);
+		$saved = isset( $pcopt['ttl'] ) ? wpoptimizing_page_cache_ttl_policy( (int) $pcopt['ttl'] )['ttl'] : WPOPTIMIZING_PC_TTL_DEFAULT_HOURS * HOUR_IN_SECONDS;
+		$hours = (int) ( $saved / HOUR_IN_SECONDS );
+		echo '<p><label for="wpopt_pc_ttl_hours"><strong>' . esc_html__( 'Rebuild cached pages after', 'wpoptimizing' ) . '</strong></label></p>';
+		echo '<div class="wpopt-select-290"><select id="wpopt_pc_ttl_hours" name="wpopt_pc_ttl_hours" class="wpopt-select2">';
+		for ( $h = 1; $h <= WPOPTIMIZING_PC_TTL_MAX_HOURS; $h++ ) {
+			/* translators: %d: number of hours. */
+			echo '<option value="' . esc_attr( (string) $h ) . '"' . selected( $hours, $h, false ) . '>' . esc_html( sprintf( _n( '%d hour', '%d hours', $h, 'wpoptimizing' ), $h ) ) . '</option>';
+		}
+		echo '</select></div>';
+		// The filter wins over the screen (and may go past 12 hours, on purpose): say so, or the
+		// choice above would look ignored.
+		$effective = function_exists( 'wpoptimizing_page_cache_ttl' ) ? (int) wpoptimizing_page_cache_ttl() : $saved;
+		// A site whose nonces live less than the default (the nonce_life filter): pages kept longer
+		// than a nonce is guaranteed show forms and buttons that fail.
+		$window = function_exists( 'wpoptimizing_page_cache_nonce_window' ) ? (int) wpoptimizing_page_cache_nonce_window() : 0;
+		if ( $window > 0 && ( 0 === $effective || $effective > $window ) ) {
+			echo '<div class="notice notice-warning inline"><p>' . esc_html(
+				sprintf(
+					/* translators: %s: hours (may have decimals). */
+					__( 'WordPress security tokens on this site are only guaranteed for %s hours, less than pages are kept: forms and buttons on older pages may fail. Choose a shorter lifetime.', 'wpoptimizing' ),
+					number_format_i18n( $window / HOUR_IN_SECONDS, 0 === $window % HOUR_IN_SECONDS ? 0 : 1 )
+				)
+			) . '</p></div>';
+		}
+		if ( $effective !== $saved ) {
+			echo '<p class="description">' . wp_kses(
+				sprintf(
+					/* translators: 1: filter name, 2: lifetime in hours (may have decimals), or 0 for never. */
+					__( 'Code on this site changes it through the %1$s filter: pages are kept for %2$s hours (0 means they never expire).', 'wpoptimizing' ),
+					'<code>wpoptimizing_page_cache_ttl</code>',
+					esc_html( number_format_i18n( $effective / HOUR_IN_SECONDS, 0 === $effective % HOUR_IN_SECONDS ? 0 : 1 ) )
+				),
+				array( 'code' => array() )
+			) . '</p>';
+		}
+
+		$this->render_subsection_header(
+			__( 'Compression', 'wpoptimizing' ),
+			__( 'A compressed copy of each page is stored next to the normal one and sent to every browser that accepts it: smaller pages, sent faster, at no cost per visit. Turn it off only if the server already compresses pages on its own and something looks wrong.', 'wpoptimizing' )
+		);
+		echo '<p><label><input type="checkbox" name="wpopt_pc_gzip" value="1"' . checked( ! isset( $pcopt['gzip'] ) || ! empty( $pcopt['gzip'] ), true, false ) . ' /> ' . esc_html__( 'Store compressed copies (gzip)', 'wpoptimizing' ) . '</label></p>';
+	}
 
 
 	/**
@@ -1058,7 +1297,8 @@ trait WPOptimizing_Cache_Trait {
 			admin_url( 'admin.php' )
 		);
 
-		$cache_intro = __( 'Speed up the admin and the front end with a persistent object cache and per-request query deduplication — safe and reversible.', 'wpoptimizing' );
+		// The basic page cache is in both editions (24/11/2026): one intro for both.
+		$cache_intro = __( 'Speed up the admin and the front end with a persistent object cache and per-request query deduplication — safe, reversible and free. Full-page HTML caching is available too, but it is opt-in and off by default, so nothing ever serves a stale page unless you turn it on.', 'wpoptimizing' );
 		$this->render_section_header(
 			__( 'Cache', 'wpoptimizing' ),
 			$cache_intro,
@@ -1183,7 +1423,7 @@ trait WPOptimizing_Cache_Trait {
 					}
 				);
 				if ( ! empty( $page_caches ) ) {
-					$detected_note = __( 'WPOptimizing detects your host or plugin page cache and purges it automatically after a cleanup (and from the toolbar “Flush all caches”), so visitors never see stale content.', 'wpoptimizing' );
+					$detected_note = __( 'WPOptimizing detects your host or plugin page cache and purges it automatically after a cleanup (and from the toolbar “Flush all caches”), so visitors never see stale content. Its own page cache, in this tab, is optional and does not run alongside another one.', 'wpoptimizing' );
 					$this->render_subsection_header(
 						__( 'Detected page caches', 'wpoptimizing' ),
 						$detected_note
@@ -1239,21 +1479,143 @@ trait WPOptimizing_Cache_Trait {
 		} // end Object cache section
 
 		// ===== Page cache section =====
-		if ( 'page' === $csec ) {
-			// The page cache, its preload and the pages at Cloudflare's edge are Pro (23/10/2026):
-			// Lite has none of that code, only the note; Pro without a license shows it locked.
-			$pc_pro = false;
-			if ( ! $pc_pro ) {
-				$this->render_section_header(
-					__( 'Page cache', 'wpoptimizing' ),
-					__( 'A page cache serves a static HTML copy of each page to anonymous visitors, so most requests never boot WordPress.', 'wpoptimizing' ),
-					array(
-						'icon' => 'admin-page',
-						'doc'  => 'wpopt-doc-cache',
+		// The basic page cache is in both editions (24/11/2026). The free edition does not serve a
+		// multisite network (wpoptimizing_page_cache_unsupported()), nor does Pro without a license.
+		$pc_unsupported = 'page' === $csec && function_exists( 'wpoptimizing_page_cache_unsupported' ) && wpoptimizing_page_cache_unsupported();
+		if ( $pc_unsupported ) {
+			$this->render_section_header(
+				__( 'Page cache', 'wpoptimizing' ),
+				__( 'A page cache serves a static HTML copy of each page to anonymous visitors, so most requests never boot WordPress.', 'wpoptimizing' ),
+				array(
+					'icon' => 'admin-page',
+					'doc'  => 'wpopt-doc-cache',
+				)
+			);
+			$pc_note = __( 'The page cache is not available on a multisite network.', 'wpoptimizing' );
+			echo '<p class="description wpopt-prose">' . esc_html( $pc_note ) . '</p>';
+		}
+		if ( 'page' === $csec && ! $pc_unsupported ) {
+			$pc     = function_exists( 'wpoptimizing_page_cache_status' ) ? wpoptimizing_page_cache_status() : array();
+			$co     = isset( $pc['coexistence'] ) ? $pc['coexistence'] : array(
+				'conflict'       => false,
+				'caches'         => array(),
+				'foreign_dropin' => false,
+			);
+			$active = ! empty( $pc['installed'] ) && ! empty( $pc['ours'] );
+
+			$this->render_section_header(
+				__( 'Page cache', 'wpoptimizing' ),
+				__( 'Serves a static HTML copy of each page to anonymous visitors, so most requests never boot WordPress — the single biggest speed win. Opt-in and off by default: logged-in users, carts, checkout, admin, feeds and any dynamic request are never cached, and the cache is purged automatically whenever content changes.', 'wpoptimizing' ),
+				array(
+					'icon' => 'admin-page',
+					'doc'  => 'wpopt-doc-cache',
+				)
+			);
+
+			echo '<table class="widefat striped wpopt-table-full"><tbody>';
+			$state_html = $active
+				? '<span class="wpopt-ok">' . esc_html__( 'Active', 'wpoptimizing' ) . '</span>'
+				: ( ! empty( $co['foreign_dropin'] )
+					? '<span class="wpopt-warn">' . esc_html( $this->managed_by_label( 'page' ) ) . '</span>'
+					: '<span class="wpopt-muted">' . esc_html__( 'Not active', 'wpoptimizing' ) . '</span>' );
+			printf( '<tr><th class="wpopt-th-label" scope="row">%s</th><td>%s</td></tr>', esc_html__( 'Status', 'wpoptimizing' ), $state_html . ( empty( $pc['unwritable'] ) ? '' : ' <span class="wpopt-warn">' . esc_html( sprintf( /* translators: %s: cache files and folders. */ __( 'The web server cannot write to %s: no page is stored there until they belong to its user again.', 'wpoptimizing' ), implode( ', ', (array) $pc['unwritable'] ) ) ) . '</span>' ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Pre-escaped above.
+			printf(
+				'<tr><th scope="row">%s</th><td>%s</td></tr>',
+				esc_html__( 'WP_CACHE constant', 'wpoptimizing' ),
+				! empty( $pc['wp_cache'] ) ? esc_html__( 'Defined', 'wpoptimizing' ) : esc_html__( 'Not defined', 'wpoptimizing' )
+			);
+			echo '</tbody></table>';
+
+			// With a foreign advanced-cache.php, render_foreign_dropin() below says the same with the
+			// owner's name; this notice is for a page cache that works without that file.
+			if ( ! empty( $co['caches'] ) && empty( $co['foreign_dropin'] ) ) {
+				echo '<div class="notice notice-warning inline wpopt-prose"><p>'
+					. esc_html(
+						sprintf(
+							/* translators: %s: detected page-cache plugin names. */
+							__( 'Another page cache is active: %s. Disable it before enabling ours to avoid two caches fighting over the same page.', 'wpoptimizing' ),
+							implode( ', ', $co['caches'] )
+						)
 					)
+					. '</p></div>';
+			}
+			if ( ! empty( $co['foreign_dropin'] ) ) {
+				$this->render_foreign_dropin( 'page', 'wpopt_pagecache_replace', (array) $co['caches'] );
+			}
+
+			$can = $this->can_manage_dropin();
+			echo '<form method="post" action="' . esc_url( $base_url ) . '" class="wpopt-prose">';
+			echo '<input type="hidden" name="' . esc_attr( $this->nonce_field ) . '" value="' . esc_attr( $nonce ) . '" />';
+			echo '<input type="hidden" name="tab" value="cache" />';
+			echo '<input type="hidden" name="csec" value="page" />';
+			if ( ! $can ) {
+				echo '<p class="description">' . esc_html__( 'Only a network administrator can manage the page cache on this multisite network.', 'wpoptimizing' ) . '</p>';
+			} elseif ( $active ) {
+				submit_button( __( 'Disable page cache', 'wpoptimizing' ), 'secondary', 'wpopt_pagecache_uninstall', false );
+				echo ' ';
+				submit_button( __( 'Clear page cache now', 'wpoptimizing' ), 'secondary', 'wpopt_pagecache_flush', false );
+			} elseif ( empty( $co['conflict'] ) ) {
+				submit_button( __( 'Enable page cache', 'wpoptimizing' ), 'primary', 'wpopt_pagecache_install', false );
+			}
+			echo '</form>';
+
+			/*
+			 * ONE FORM, ONE SAVE BUTTON for everything this screen configures (lifetime, exclusions,
+			 * page types, the mobile cache, and in Pro the preload and the rest): two forms with a
+			 * save button each lost the edits of the one not pressed. "Preload now" is an action, so
+			 * it submits its own form through the form attribute instead of being nested.
+			 */
+			$pcopt  = (array) get_option( 'wpoptimizing_page_cache', array() );
+			$pl_ok  = false;
+			$pro_ex = false;
+			$pc_pro = false;
+			if ( $can ) {
+				echo '<form method="post" action="' . esc_url( $base_url ) . '" class="wpopt-prose">';
+				echo '<input type="hidden" name="' . esc_attr( $this->nonce_field ) . '" value="' . esc_attr( $nonce ) . '" />';
+				echo '<input type="hidden" name="tab" value="cache" /><input type="hidden" name="csec" value="page" />';
+			}
+			// WP-Cron runs from visits that load WordPress, and a cached site has few: hits served by
+			// PHP fire it as a fallback (wpopt_pc_cron_arm()), but pages sent without PHP or by a CDN
+			// never do. When a task has waited over 10 minutes, recommend the reliable way.
+			if ( $active && function_exists( 'wpoptimizing_page_cache_cron_late' ) && wpoptimizing_page_cache_cron_late() ) {
+				echo '<div class="notice notice-warning inline"><p>' . esc_html__( 'WP-Cron is running late: a scheduled task has been waiting for more than 10 minutes. WP-Cron depends on visits that reach WordPress, and most visits are now answered from the cache. Set a system cron that calls wp-cron.php every minute.', 'wpoptimizing' ) . '</p></div>';
+			}
+
+			// Lifetime, exclusions, page types and the mobile copy: both editions.
+			if ( $can ) {
+				$this->render_page_cache_lifetime( $pcopt );
+				$this->render_subsection_header(
+					__( 'Custom exclusions', 'wpoptimizing' ),
+					__( 'Extra rules on top of the automatic ones (which can never be removed). One entry per line.', 'wpoptimizing' )
 				);
-				$pc_note = __( 'A page cache, with background preload and page caching at Cloudflare\'s edge, is not included in this plugin.', 'wpoptimizing' );
-				$this->render_pro_note( $pc_note );
+				$pc_fields = array(
+					'wpopt_pc_reject_uri'      => array( 'reject_uri', __( 'Never cache these URL paths', 'wpoptimizing' ), __( 'e.g. /my-dynamic-page/', 'wpoptimizing' ) ),
+					'wpopt_pc_reject_cookies'  => array( 'reject_cookies', __( 'Never cache when these cookies are present', 'wpoptimizing' ), __( 'cookie name fragment, e.g. my_membership_', 'wpoptimizing' ) ),
+					'wpopt_pc_query_whitelist' => array( 'query_whitelist', __( 'Still cache with these query parameters', 'wpoptimizing' ), __( 'parameter name, e.g. currency', 'wpoptimizing' ) ),
+					'wpopt_pc_ignored_query'   => array( 'ignored_query', __( 'Also ignore these tracking parameters (the page is cached as if they were not there)', 'wpoptimizing' ), __( 'parameter name, e.g. ref', 'wpoptimizing' ) ),
+					'wpopt_pc_reject_ua'       => array( 'reject_ua', __( 'Never cache for these browsers or bots', 'wpoptimizing' ), __( 'part of the user agent, e.g. Lighthouse', 'wpoptimizing' ) ),
+				);
+				foreach ( $pc_fields as $field => $meta ) {
+					$val = isset( $pcopt[ $meta[0] ] ) && is_array( $pcopt[ $meta[0] ] ) ? implode( "\n", $pcopt[ $meta[0] ] ) : '';
+					echo '<p><label for="' . esc_attr( $field ) . '"><strong>' . esc_html( $meta[1] ) . '</strong></label><br />';
+					echo '<textarea id="' . esc_attr( $field ) . '" name="' . esc_attr( $field ) . '" rows="3" class="large-text code" placeholder="' . esc_attr( $meta[2] ) . '">' . esc_textarea( $val ) . '</textarea></p>';
+				}
+				$this->render_page_type_exclusions( $pcopt );
+				$this->render_subsection_header(
+					__( 'Mobile devices', 'wpoptimizing' ),
+					__( 'Turn this on only if your theme shows phones a different page, for example another menu or fewer sections. Pages are then cached twice, once for phones and once for computers.', 'wpoptimizing' )
+				);
+				echo '<p><label><input type="checkbox" name="wpopt_pc_mobile_separate" value="1"' . checked( ! empty( $pcopt['mobile_separate'] ), true, false ) . ' /> ' . esc_html__( 'Separate cache for mobile devices', 'wpoptimizing' ) . '</label></p>';
+			}
+
+			if ( $can ) {
+				submit_button( __( 'Save settings', 'wpoptimizing' ), 'primary wpopt-save-btn', 'wpopt_pagecache_settings_save', false );
+				echo '</form>';
+			}
+			if ( ! $pc_pro ) {
+				// Lite: una nota neutra, sin candado; el enlace a Pro lo añade render_pro_note().
+				$pro_note_text = __( 'Preloading, serving pages without PHP, Brotli copies, HTML minification, hit diagnostics, caching text files and REST routes, and page caching at Cloudflare\'s edge are not included in this plugin.', 'wpoptimizing' );
+				$this->render_pro_note( $pro_note_text );
 			}
 		} // end Page cache section
 

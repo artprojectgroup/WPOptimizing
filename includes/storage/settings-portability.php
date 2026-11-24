@@ -510,7 +510,11 @@ function wpoptimizing_portable_option_sanitizers() {
 		// 'stats' (hit diagnostics) travels as the switch only; the counters' folder token stays
 		// in its own option, so a file never points one site at another's folder.
 		// Compression switches are flags: brotli joins 'gzip' here when it exists (fase 4 B).
-		foreach ( array( 'gzip', 'preload', 'mobile_separate', 'reject_front', 'reject_home', 'reject_archives', 'reject_paged', 'minify_html', 'stats', 'preload_sitemap', 'brotli', 'early_hints' ) as $flag ) {
+		// The free edition keeps only what its page cache uses (24/11/2026): a file or an import
+		// from Pro, or from another plugin, cannot leave Pro switches stored in it.
+		$flags = array( 'gzip', 'mobile_separate', 'reject_front', 'reject_home', 'reject_archives', 'reject_paged' );
+		$lists = array( 'reject_uri', 'reject_cookies', 'query_whitelist', 'reject_ua', 'ignored_query' );
+		foreach ( $flags as $flag ) {
 			if ( isset( $value[ $flag ] ) ) {
 				$out[ $flag ] = ! empty( $value[ $flag ] );
 			}
@@ -520,12 +524,7 @@ function wpoptimizing_portable_option_sanitizers() {
 		if ( isset( $value['ttl'] ) ) {
 			$out['ttl'] = wpoptimizing_page_cache_ttl_policy( is_scalar( $value['ttl'] ) ? (int) $value['ttl'] : 0 )['ttl'];
 		}
-		// Pages purged with every purge: only pages of THIS site's host survive, so a file from
-		// another site never makes this one purge (or send to Cloudflare) someone else's URLs.
-		if ( isset( $value['purge_always'] ) ) {
-			$out['purge_always'] = wpoptimizing_content_always_purge_parse( wpoptimizing_portable_text_list( $value['purge_always'] ), home_url( '/' ) )['urls'];
-		}
-		foreach ( array( 'reject_uri', 'reject_cookies', 'query_whitelist', 'reject_ua', 'ignored_query', 'minify_html_keep' ) as $list ) {
+		foreach ( $lists as $list ) {
 			if ( isset( $value[ $list ] ) ) {
 				$out[ $list ] = wpoptimizing_portable_text_list( $value[ $list ] );
 			}

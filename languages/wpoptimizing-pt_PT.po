@@ -14684,3 +14684,33 @@ msgstr "Para que as visitas de campanhas (utm_*, gclid…) também sejam servida
 msgid "Transform Rules"
 msgstr "Transform Rules"
 
+#: includes/admin/trait-cache.php
+msgid "The page cache is not available on a multisite network."
+msgstr "A cache de página não está disponível numa rede multisite."
+
+#: includes/admin/trait-cache.php
+msgid "On a multisite network the page cache is part of Pro and needs an active license."
+msgstr "Numa rede multisite, a cache de página faz parte do Pro e precisa de uma licença ativa."
+
+#: includes/admin/trait-cache.php
+msgid "Preloading, serving pages without PHP, Brotli copies, HTML minification, hit diagnostics, caching text files and REST routes, and page caching at Cloudflare's edge are not included in this plugin."
+msgstr "O pré-carregamento, servir as páginas sem PHP, as cópias Brotli, a minificação do HTML, o diagnóstico de acertos, a cache de ficheiros de texto e rotas REST e a cache de páginas na periferia da Cloudflare não estão incluídos neste plugin."
+
+#: includes/admin/trait-cache.php
+msgid "Pro adds preloading, serving pages without PHP, Brotli copies, HTML minification, hit diagnostics, caching text files and REST routes, and page caching at Cloudflare's edge."
+msgstr "O Pro acrescenta o pré-carregamento, servir as páginas sem PHP, as cópias Brotli, a minificação do HTML, o diagnóstico de acertos, a cache de ficheiros de texto e rotas REST e a cache de páginas na periferia da Cloudflare."
+
+#. translators: %s: the other plugin's setting, e.g. "Preload cache".
+#: includes/importers/importer.php
+#, php-format
+msgid "%s: not imported, this edition of WPOptimizing does not have it."
+msgstr "%s: não importado, esta edição do WPOptimizing não o tem."
+
+#: includes/admin/class-help.php
+msgid "serves a static copy of each page to anonymous visitors, for 10 hours by default (from 1 to 12), and clears what changes. Logged-in users, carts, checkout and the admin are never cached. Enabling it writes wp-content/advanced-cache.php and adds WP_CACHE to wp-config.php. It stays off while another page cache is active, and it is not available on a multisite network."
+msgstr "serve uma cópia estática de cada página aos visitantes anónimos, durante 10 horas por predefinição (de 1 a 12), e limpa o que muda. Os utilizadores com sessão iniciada, os carrinhos, o checkout e a administração nunca ficam em cache. Ativá-la escreve wp-content/advanced-cache.php e acrescenta WP_CACHE ao wp-config.php. Fica desativada enquanto houver outra cache de página ativa e não está disponível numa rede multisite."
+
+#: includes/admin/class-help.php
+msgid "serves a static copy of each page to anonymous visitors, for 10 hours by default (from 1 to 12), and clears what changes. Logged-in users, carts, checkout and the admin are never cached. Enabling it writes wp-content/advanced-cache.php and adds WP_CACHE to wp-config.php. It stays off while another page cache is active; on a multisite network, a network administrator turns it on site by site."
+msgstr "serve uma cópia estática de cada página aos visitantes anónimos, durante 10 horas por predefinição (de 1 a 12), e limpa o que muda. Os utilizadores com sessão iniciada, os carrinhos, o checkout e a administração nunca ficam em cache. Ativá-la escreve wp-content/advanced-cache.php e acrescenta WP_CACHE ao wp-config.php. Fica desativada enquanto houver outra cache de página ativa; numa rede multisite, um administrador da rede ativa-a site a site."
+

@@ -170,9 +170,28 @@ function wpoptimizing_importer_plan( $id ) {
 	if ( ! is_array( $plan ) ) {
 		return null;
 	}
+	$changes = array_values( (array) ( $plan['changes'] ?? array() ) );
+	$notes   = array_values( (array) ( $plan['notes'] ?? array() ) );
+	// The page cache is in both editions, but its preload, the HTML minification and «purge also
+	// these pages» are Pro: in the free edition those changes are not offered as imported (the
+	// settings import would drop them anyway), and the person is told which were left out.
+	$pro_only = array( 'preload', 'minify_html', 'purge_always' );
+	foreach ( $changes as $n => $c ) {
+		if ( 'wpoptimizing_page_cache' === ( $c['option'] ?? '' ) && in_array( (string) ( $c['key'] ?? '' ), $pro_only, true ) ) {
+			$notes[] = wpoptimizing_importer_note(
+				'skipped',
+				sprintf(
+					/* translators: %s: the other plugin's setting, e.g. "Preload cache". */
+					__( '%s: not imported, this edition of WPOptimizing does not have it.', 'wpoptimizing' ),
+					(string) ( $c['from'] ?? '' )
+				)
+			);
+			unset( $changes[ $n ] );
+		}
+	}
 	return array(
-		'changes' => array_values( (array) ( $plan['changes'] ?? array() ) ),
-		'notes'   => array_values( (array) ( $plan['notes'] ?? array() ) ),
+		'changes' => array_values( $changes ),
+		'notes'   => $notes,
 	);
 }
 

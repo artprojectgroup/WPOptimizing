@@ -306,6 +306,9 @@ class WPOptimizing_Help {
 	 * @return array
 	 */
 	private static function panels_cache() {
+		// La caché de página básica es de las dos versiones (24/11/2026); lo que cambia es la red:
+		// en Lite no se ofrece en multisitio y en Pro sí, sitio por sitio.
+		$page_cache_help = __( 'serves a static copy of each page to anonymous visitors, for 10 hours by default (from 1 to 12), and clears what changes. Logged-in users, carts, checkout and the admin are never cached. Enabling it writes wp-content/advanced-cache.php and adds WP_CACHE to wp-config.php. It stays off while another page cache is active, and it is not available on a multisite network.', 'wpoptimizing' );
 		return array(
 			'cache'      => array(
 				'title' => __( 'Object and page cache', 'wpoptimizing' ),
@@ -313,6 +316,8 @@ class WPOptimizing_Help {
 				'items' => array(
 					__( 'Every cache is off until you turn it on, and turning it off puts back what was there. A drop-in that belongs to another plugin is never overwritten unless you choose to replace it, and the original is kept to give it back.', 'wpoptimizing' ),
 					__( 'Object cache', 'wpoptimizing' ) => __( 'keeps the results of database queries in Redis, Memcached, APCu or a SQLite file. Enabling it writes wp-content/object-cache.php.', 'wpoptimizing' ),
+					__( 'Page cache', 'wpoptimizing' )   => $page_cache_help,
+					__( 'Custom exclusions', 'wpoptimizing' ) => __( 'paths, cookies and query parameters on top of the automatic rules, and a separate cache for mobile devices.', 'wpoptimizing' ),
 					__( 'Query deduplication', 'wpoptimizing' ) => __( 'writes wp-content/db.php, which answers identical read queries of the same request from memory. Any write clears it.', 'wpoptimizing' ),
 					__( 'Analytics', 'wpoptimizing' )    => __( 'hit rate, queries and the most duplicated queries of the last 30 days.', 'wpoptimizing' ),
 					__( 'Settings', 'wpoptimizing' )     => __( 'the backend and its connection, Heartbeat and the cached comment counts of the dashboard. Saving flushes the object cache.', 'wpoptimizing' ),

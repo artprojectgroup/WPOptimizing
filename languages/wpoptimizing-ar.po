@@ -14908,3 +14908,33 @@ msgstr "لكي تُقدَّم زيارات الحملات (utm_*، gclid…) م�
 msgid "Transform Rules"
 msgstr "Transform Rules"
 
+#: includes/admin/trait-cache.php
+msgid "The page cache is not available on a multisite network."
+msgstr "ذاكرة التخزين المؤقت للصفحات غير متاحة في شبكة مواقع متعددة."
+
+#: includes/admin/trait-cache.php
+msgid "On a multisite network the page cache is part of Pro and needs an active license."
+msgstr "في شبكة المواقع المتعددة، تُعد ذاكرة التخزين المؤقت للصفحات جزءًا من Pro وتحتاج إلى ترخيص نشط."
+
+#: includes/admin/trait-cache.php
+msgid "Preloading, serving pages without PHP, Brotli copies, HTML minification, hit diagnostics, caching text files and REST routes, and page caching at Cloudflare's edge are not included in this plugin."
+msgstr "التحميل المسبق، وتقديم الصفحات دون PHP، ونسخ Brotli، وتصغير HTML، وتشخيص الإصابات، وتخزين الملفات النصية ومسارات REST مؤقتًا، وتخزين الصفحات مؤقتًا على حافة Cloudflare غير مضمّنة في هذه الإضافة."
+
+#: includes/admin/trait-cache.php
+msgid "Pro adds preloading, serving pages without PHP, Brotli copies, HTML minification, hit diagnostics, caching text files and REST routes, and page caching at Cloudflare's edge."
+msgstr "يضيف Pro التحميل المسبق، وتقديم الصفحات دون PHP، ونسخ Brotli، وتصغير HTML، وتشخيص الإصابات، وتخزين الملفات النصية ومسارات REST مؤقتًا، وتخزين الصفحات مؤقتًا على حافة Cloudflare."
+
+#. translators: %s: the other plugin's setting, e.g. "Preload cache".
+#: includes/importers/importer.php
+#, php-format
+msgid "%s: not imported, this edition of WPOptimizing does not have it."
+msgstr "%s: لم يُستورد، فهذا الإصدار من WPOptimizing لا يتضمنه."
+
+#: includes/admin/class-help.php
+msgid "serves a static copy of each page to anonymous visitors, for 10 hours by default (from 1 to 12), and clears what changes. Logged-in users, carts, checkout and the admin are never cached. Enabling it writes wp-content/advanced-cache.php and adds WP_CACHE to wp-config.php. It stays off while another page cache is active, and it is not available on a multisite network."
+msgstr "يقدّم للزوار المجهولين نسخة ثابتة من كل صفحة، لمدة 10 ساعات افتراضيًا (من 1 إلى 12)، ويمسح ما يتغيّر. لا يُخزَّن مؤقتًا أبدًا المستخدمون المسجَّلون ولا السلال ولا الدفع ولا لوحة الإدارة. يؤدي تفعيله إلى كتابة wp-content/advanced-cache.php وإضافة WP_CACHE إلى wp-config.php. يبقى معطّلًا ما دامت ذاكرة تخزين صفحات أخرى نشطة، وهو غير متاح في شبكة متعددة المواقع."
+
+#: includes/admin/class-help.php
+msgid "serves a static copy of each page to anonymous visitors, for 10 hours by default (from 1 to 12), and clears what changes. Logged-in users, carts, checkout and the admin are never cached. Enabling it writes wp-content/advanced-cache.php and adds WP_CACHE to wp-config.php. It stays off while another page cache is active; on a multisite network, a network administrator turns it on site by site."
+msgstr "يقدّم للزوار المجهولين نسخة ثابتة من كل صفحة، لمدة 10 ساعات افتراضيًا (من 1 إلى 12)، ويمسح ما يتغيّر. لا يُخزَّن مؤقتًا أبدًا المستخدمون المسجَّلون ولا السلال ولا الدفع ولا لوحة الإدارة. يؤدي تفعيله إلى كتابة wp-content/advanced-cache.php وإضافة WP_CACHE إلى wp-config.php. يبقى معطّلًا ما دامت ذاكرة تخزين صفحات أخرى نشطة؛ وفي شبكة متعددة المواقع يفعّله مدير الشبكة موقعًا بموقع."
+

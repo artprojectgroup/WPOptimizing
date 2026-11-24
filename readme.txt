@@ -8,11 +8,11 @@ Stable tag: 0.1.0
 License: GNU General Public License v3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
-Speeds up WordPress with an object cache and front-end tweaks, and cleans up leftovers knowing which plugin or theme owns each one.
+Speeds up WordPress with a page cache, an object cache and front-end tweaks, and cleans up leftovers knowing which plugin or theme owns each one.
 
 == Description ==
 
-**WPOptimizing** measures where the time goes, speeds the site up (object cache, query deduplication, autoload, CSS and JavaScript, images, delivery) and cleans up what is left over, knowing *who* owns each database record and file before you delete anything. It caches database queries and objects, never whole pages, so it can never serve a stale page or break a form.
+**WPOptimizing** measures where the time goes, speeds the site up (page cache, object cache, query deduplication, autoload, CSS and JavaScript, images, delivery) and cleans up what is left over, knowing *who* owns each database record and file before you delete anything. Its page cache is off until you turn it on, and it only serves copies to anonymous visitors: logged-in users, carts, checkout, forms that set a cookie, searches and the admin always get a freshly built page, and every change to the content purges the pages it appears on.
 
 Most cleanup plugins delete blindly. WPOptimizing attributes every option, post/user/term meta, custom post type, taxonomy, shortcode, widget, cron job, Action Scheduler action and file to its owning plugin or theme using a multi-level confidence system, so you always know what you are deleting and why.
 
@@ -36,6 +36,7 @@ Most cleanup plugins delete blindly. WPOptimizing attributes every option, post/
 
 = Performance =
 
+* **Page cache** (opt-in, single sites): serves a static copy of each page to anonymous visitors through `advanced-cache.php`, so most visits never start WordPress. Fixed safety exclusions that cannot be removed (logged-in users, sessions, carts and checkout, the admin, REST, AJAX, feeds, searches, any page that sets a cookie or says it must not be stored), plus your own exclusions by URL, cookie, browser, query parameter and page type. Pages are purged when the content they show changes, rebuilt after 1 to 12 hours (inside the life of WordPress' security tokens), stored compressed with gzip, served stale for a moment while one request rebuilds them, kept apart per currency and language, and optionally per device. A "Purge this page" toolbar button, WP-Cron kept running on cached sites, and it refuses to run next to another page cache or a hosting cache it cannot purge. Not available on multisite networks.
 * **Persistent object cache** drop-in (Redis, Memcached, APCu or built-in SQLite) with hit-rate analytics; honours the WP_REDIS_* constants and never serves stale data after an outage.
 * **Query deduplication** drop-in that collapses identical reads within a request and attributes duplicate queries to the responsible plugin or theme.
 * **Database and Redis diagnosis** that lists only what needs fixing, each with the setting that fixes it.
@@ -72,7 +73,7 @@ Most cleanup plugins delete blindly. WPOptimizing attributes every option, post/
 * **Estimated** — Prefix pattern match only. Review before deleting.
 * **Undetermined** — No attribution possible. Never delete without manual review.
 
-WPOptimizing Pro, sold separately at [wpoptimizing.com](https://wpoptimizing.com), adds a page cache, Smart Assets, delayed JavaScript, critical CSS, image optimization, the media library audit, scheduled cleanup, deletion in bulk and tools for agencies; this plugin works fully on its own.
+WPOptimizing Pro, sold separately at [wpoptimizing.com](https://wpoptimizing.com), adds serving cached pages without PHP, preload, Brotli, HTML minification, hit diagnostics and pages at Cloudflare's edge to the page cache, plus Smart Assets, delayed JavaScript, critical CSS, image optimization, the media library audit, scheduled cleanup, deletion in bulk and tools for agencies; this plugin works fully on its own.
 
 = Requirements =
 
@@ -138,7 +139,9 @@ Not automatically. Estimated means the attribution is based on prefix matching, 
 
 = Does it cache my pages? Will it conflict with my host or cache plugin? =
 
-No. WPOptimizing caches database query results and PHP objects, not full HTML pages, so it cannot serve stale pages or break forms. It detects your host or page-cache plugin and purges it after a cleanup instead of competing with it.
+Only if you turn its page cache on, in Cache › Page cache; it is off by default. It then keeps a copy of each page for anonymous visitors only: logged-in users, WooCommerce and EDD sessions, carts, checkout and account pages, the admin, searches and any page that sets a cookie or asks not to be stored are never cached, so a form or a cart is never served from someone else's copy. Pages are rebuilt within the life of WordPress' security tokens and purged when their content changes.
+
+It will not run next to another page cache: if WP Rocket, LiteSpeed Cache, W3 Total Cache or your hosting already caches pages, WPOptimizing does not switch its own on and purges theirs after a cleanup instead. The object cache and the rest work alongside any of them.
 
 = Will it slow down a very large site? =
 
@@ -150,7 +153,7 @@ Yes. WPOptimizing declares compatibility with High-Performance Order Storage and
 
 = Does it support WordPress Multisite? =
 
-Yes. Each subsite scans, reviews and cleans its own data in isolation.
+Yes. Each subsite scans, reviews and cleans its own data in isolation. The page cache is not available on multisite networks.
 
 = Where are my backups stored? =
 

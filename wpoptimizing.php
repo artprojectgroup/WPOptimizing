@@ -859,6 +859,8 @@ require_once __DIR__ . '/includes/storage/upload-backoff.php';
 // pure accessors only — no filesystem, no network, nothing at file scope.
 require_once __DIR__ . '/includes/compat/registry.php';
 require_once __DIR__ . '/includes/frontend-perf.php';
+// The basic page cache is in both editions (24/11/2026); its Pro parts load from inside it.
+require_once __DIR__ . '/includes/page-cache.php'; // Inert until installed.
 require_once __DIR__ . '/includes/core-tweaks.php';
 require_once __DIR__ . '/includes/cron-tasks.php'; // Scheduled tasks: health, run now, pause (the guard hooks only on cron requests).
 require_once __DIR__ . '/includes/cloudflare.php'; // Cloudflare purge; one autoloaded flag on a visitor request, inert until configured.
