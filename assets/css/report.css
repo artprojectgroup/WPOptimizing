@@ -1,0 +1,60 @@
+/*
+ * Standalone printable reports (impact, general cleanup, network). Their own document, outside
+ * the admin chrome. The page width and the number of summary cards differ per report, so they
+ * are custom properties set by wpoptimizing_print_report_styles().
+ */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 14px; color: #1d2327; padding: 32px; max-width: var(--wpopt-report-width, 960px); margin: 0 auto; }
+.no-print { margin-bottom: 16px; }
+.print-btn { background: #2271b1; color: #fff; border: none; padding: 10px 20px; border-radius: 3px; cursor: pointer; font-size: 14px; display: inline-flex; align-items: center; gap: 6px; }
+.print-btn:hover { background: #135e96; }
+.close-btn { background: none; border: 1px solid #ccc; padding: 10px 20px; border-radius: 3px; cursor: pointer; font-size: 14px; margin-left: 8px; color: #50575e; }
+.report-header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #2271b1; padding-bottom: 20px; margin-bottom: 28px; }
+.report-brand { font-size: 26px; font-weight: 700; color: #2271b1; letter-spacing: -.5px; }
+.report-sub { color: #50575e; margin-top: 4px; }
+.report-logo { max-height: 48px; max-width: 240px; margin-bottom: 6px; display: block; }
+.report-meta { text-align: right; font-size: 13px; color: #50575e; line-height: 1.6; }
+.report-meta strong { color: #1d2327; }
+.summary-grid { display: grid; grid-template-columns: repeat(var(--wpopt-report-cols, 4), 1fr); gap: 12px; margin-bottom: 28px; }
+.card { border: 1px solid #dcdcde; border-radius: 4px; padding: 14px; text-align: center; background: #f6f7f7; }
+.card .num { font-size: 20px; font-weight: 700; color: #2271b1; }
+.card .lbl { font-size: 10px; color: #787c82; margin-top: 6px; text-transform: uppercase; letter-spacing: .03em; }
+h2 { font-size: 15px; font-weight: 600; margin: 24px 0 12px; padding-bottom: 8px; border-bottom: 1px solid #dcdcde; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { background: #f6f7f7; text-align: left; padding: 8px 10px; border-bottom: 2px solid #dcdcde; font-size: 11px; text-transform: uppercase; color: #50575e; }
+td { padding: 8px 10px; border-bottom: 1px solid #f0f0f1; vertical-align: top; }
+tr:last-child td { border-bottom: none; }
+.r { text-align: right; }
+.muted { color: #787c82; }
+.cell-url { color: #787c82; font-size: 12px; }
+.hint { font-size: 12px; color: #787c82; margin-top: 10px; }
+.footer { margin-top: 36px; padding-top: 16px; border-top: 1px solid #dcdcde; font-size: 11px; color: #787c82; display: flex; justify-content: space-between; }
+
+/* Attribution-status badges and column helpers of the impact report. */
+.badge { display: inline-block; padding: 1px 7px; border-radius: 3px; font-size: 11px; font-weight: 600; text-transform: uppercase; }
+.badge-orphan { background: #f8d7da; color: #721c24; }
+.badge-inactive { background: #fff3cd; color: #856404; }
+.badge-active { background: #d4edda; color: #155724; }
+.badge-delete { background: #cce5ff; color: #004085; }
+.col-w35 { width: 35%; }
+.mono { font-family: monospace; font-size: 12px; }
+
+@media screen and (max-width: 600px) {
+	body { padding: 14px; }
+	.summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+	.card { padding: 10px; }
+	.card .num { font-size: 17px; }
+	.report-header { flex-direction: column; gap: 8px; }
+	.report-meta { text-align: left; }
+	.footer { flex-direction: column; gap: 6px; }
+	table { width: 100%; font-size: 12px; }
+	th, td { padding: 6px 8px; word-break: break-word; }
+}
+@media screen and (max-width: 400px) {
+	.summary-grid { grid-template-columns: 1fr; }
+}
+@media print {
+	.no-print { display: none !important; }
+	body { padding: 0; font-size: 12px; }
+	@page { margin: 1.4cm; }
+}
